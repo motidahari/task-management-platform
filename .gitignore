@@ -25,3 +25,6 @@ npm-debug.log*
 
 # TS incremental build info
 *.tsbuildinfo
+
+#claude
+.claude/
