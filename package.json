@@ -1,0 +1,33 @@
+{
+  "name": "task-management-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Task-management platform with a generic workflow engine and plug-in task types",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "backend-services/task-service",
+    "backend-services/libs/core/*",
+    "frontend-application/task-app"
+  ],
+  "scripts": {
+    "start": "docker compose up -d --build",
+    "stop": "docker compose down",
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w backend-services/task-service\" \"npm run dev -w frontend-application/task-app\"",
+    "lint": "npm run lint --workspaces --if-present && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.4",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0"
+  }
+}
