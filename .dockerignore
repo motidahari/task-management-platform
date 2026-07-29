@@ -1,0 +1,15 @@
+.git/
+.github/
+node_modules/
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/*.tsbuildinfo
+design-packages/
+.claude/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

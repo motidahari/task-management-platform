@@ -12,14 +12,15 @@
     "frontend-application/task-app"
   ],
   "scripts": {
-    "start": "docker compose up -d --build",
+    "setup": "node scripts/ensure-env-file.mjs",
+    "start": "npm run setup && docker compose up -d --build",
     "stop": "docker compose down",
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w backend-services/task-service\" \"npm run dev -w frontend-application/task-app\"",
     "lint": "npm run lint --workspaces --if-present && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "node --test \"tests/**/*.test.mjs\" && npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -28,6 +29,7 @@
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "yaml": "^2.9.0"
   }
 }
