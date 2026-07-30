@@ -7,8 +7,8 @@
     "node": ">=20"
   },
   "workspaces": [
-    "backend-services/task-service",
     "backend-services/libs/core/*",
+    "backend-services/task-service",
     "frontend-application/task-app"
   ],
   "scripts": {

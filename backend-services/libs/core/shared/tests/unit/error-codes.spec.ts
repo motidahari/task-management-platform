@@ -1,7 +1,7 @@
 import { defaultErrorCodeForStatus, ErrorCode, errorCodeName } from '../../src/error-codes';
 
 /**
- * The registry from API_CONTRACT §4, restated independently of the enum. A code
+ * The published error-code registry, restated independently of the enum. A code
  * is public contract: renumbering one breaks every deployed client, so this
  * table exists to make such a change fail loudly here first.
  */
