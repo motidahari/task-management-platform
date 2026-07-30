@@ -25,8 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Update open PR branches
+        # Prefer a user/App token (secret AUTO_UPDATE_TOKEN) so the merge
+        # commits it pushes are attributed to a trusted actor and re-trigger CI
+        # on the updated branches. The default github.token works too, but its
+        # pushes do not start new workflow runs (GitHub's recursion guard), so
+        # auto-updated branches would sit with stale checks. Falls back to
+        # github.token when the secret is absent.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
