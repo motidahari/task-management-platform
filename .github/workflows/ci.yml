@@ -10,8 +10,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  detect:
+    name: Detect affected workspaces
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Compute changed workspaces
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          empty_sha=0000000000000000000000000000000000000000
+          if [ "$EVENT" = "pull_request" ]; then
+            git fetch --no-tags --depth=100 origin "$BASE_REF"
+            range="origin/$BASE_REF...HEAD"
+          elif [ "$BEFORE" != "$empty_sha" ] \
+               && git rev-parse --quiet --verify "$BEFORE^{commit}" >/dev/null 2>&1; then
+            range="$BEFORE...HEAD"
+          else
+            range=""
+          fi
+
+          if [ -z "$range" ]; then
+            # No reliable base (new branch / forced push) — treat everything as
+            # changed so nothing is skipped by accident.
+            changed=$(git ls-files)
+          else
+            changed=$(git diff --name-only "$range")
+          fi
+          echo "Changed files:"
+          echo "$changed"
+
+          backend=false
+          frontend=false
+          # The shared lib and repo-wide config feed both consumers, so a change
+          # there must exercise every workspace's suite, not just its own.
+          if echo "$changed" | grep -qE '^(backend-services/libs/|package\.json$|package-lock\.json$|tsconfig\.base\.json$|eslint\.config\.mjs$|\.prettierrc|\.github/workflows/)'; then
+            backend=true
+            frontend=true
+          fi
+          echo "$changed" | grep -qE '^backend-services/task-service/' && backend=true || true
+          echo "$changed" | grep -qE '^frontend-application/' && frontend=true || true
+
+          # A workspace that does not exist on this ref cannot be tested — the
+          # fan-out rule above can flag one before its scaffold has landed.
+          [ -f backend-services/task-service/package.json ] || backend=false
+          [ -f frontend-application/task-app/package.json ] || frontend=false
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "Resolved affected: backend=$backend frontend=$frontend"
+
   quality:
     name: Lint, typecheck & unit tests
+    needs: detect
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,13 +83,21 @@ jobs:
       - run: npm ci
       # Build first: type-aware ESLint and typecheck resolve `@core/shared`
       # through its compiled dist, which does not exist in a clean checkout.
+      # Build/lint/typecheck stay repo-wide — they are cheap and catch
+      # cross-cutting breakage; only the test suites are scoped to what changed.
       - run: npm run build
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - name: Backend unit tests
+        if: needs.detect.outputs.backend == 'true'
+        run: npm run test -w backend-services/task-service
+      - name: Frontend unit tests
+        if: needs.detect.outputs.frontend == 'true'
+        run: npm run test -w frontend-application/task-app
 
   integration:
     name: Integration & API tests
+    needs: detect
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -64,9 +133,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: npm run build
+      # The integration/API suites belong to the backend, so the whole setup is
+      # gated on a backend change. When only the frontend changed this job is a
+      # fast no-op that still reports its check green for branch protection.
+      - if: needs.detect.outputs.backend == 'true'
+        run: npm ci
+      - if: needs.detect.outputs.backend == 'true'
+        run: npm run build
       # Integration/API suites run against the live postgres + redis containers
       # above. `--if-present` keeps the job green until a workspace defines the
       # script, so the service wiring is in place before the first suite lands.
-      - run: npm run test:integration --workspaces --if-present
+      - if: needs.detect.outputs.backend == 'true'
+        run: npm run test:integration --workspaces --if-present
