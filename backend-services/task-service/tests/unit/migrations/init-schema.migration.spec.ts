@@ -76,7 +76,9 @@ describe('InitSchema1700000000001', () => {
       expect(pageIndexStatement).toContain('ON tasks (assigned_user_id, created_at DESC, id DESC)');
       expect(pageIndexStatement).not.toContain('WHERE');
 
-      const partialIndexStatement = statements.find((sql) => sql.includes('idx_tasks_assignee_open'));
+      const partialIndexStatement = statements.find((sql) =>
+        sql.includes('idx_tasks_assignee_open'),
+      );
 
       expect(partialIndexStatement).toContain('assigned_user_id, created_at DESC, id DESC');
       expect(partialIndexStatement).toContain('WHERE is_closed = false');
@@ -106,9 +108,7 @@ describe('InitSchema1700000000001', () => {
       );
 
       expect(partitionStatements).toHaveLength(4);
-      expect(
-        partitionStatements.some((sql) => sql.toLowerCase().includes('default')),
-      ).toBe(false);
+      expect(partitionStatements.some((sql) => sql.toLowerCase().includes('default'))).toBe(false);
     });
 
     it('should declare the FKs from tasks and task_status_history to users, and cascade task_status_history from tasks', async () => {
@@ -123,8 +123,12 @@ describe('InitSchema1700000000001', () => {
       );
 
       expect(tasksTableStatement).toContain('REFERENCES users (id)');
-      expect(historyTableStatement).toContain('task_id uuid NOT NULL REFERENCES tasks (id) ON DELETE CASCADE');
-      expect(historyTableStatement).toContain('assigned_user_id uuid NOT NULL REFERENCES users (id)');
+      expect(historyTableStatement).toContain(
+        'task_id uuid NOT NULL REFERENCES tasks (id) ON DELETE CASCADE',
+      );
+      expect(historyTableStatement).toContain(
+        'assigned_user_id uuid NOT NULL REFERENCES users (id)',
+      );
     });
   });
 

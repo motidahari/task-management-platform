@@ -14,7 +14,11 @@ function rangeAt(plan: MonthlyPartitionRange[], index: number): MonthlyPartition
 
 describe('buildMonthlyPartitionPlan', () => {
   describe('Given:a mid-year reference date and a 3-month horizon, When:building the plan', () => {
-    const plan = buildMonthlyPartitionPlan('task_status_history', new Date('2026-07-30T12:00:00Z'), 3);
+    const plan = buildMonthlyPartitionPlan(
+      'task_status_history',
+      new Date('2026-07-30T12:00:00Z'),
+      3,
+    );
 
     it('should return exactly the current month plus 3 months ahead', () => {
       expect(plan).toHaveLength(4);
@@ -38,7 +42,9 @@ describe('buildMonthlyPartitionPlan', () => {
 
     it('should tile the timeline with no gap and no overlap between consecutive ranges', () => {
       for (let index = 1; index < plan.length; index += 1) {
-        expect(rangeAt(plan, index).rangeStartInclusive).toBe(rangeAt(plan, index - 1).rangeEndExclusive);
+        expect(rangeAt(plan, index).rangeStartInclusive).toBe(
+          rangeAt(plan, index - 1).rangeEndExclusive,
+        );
       }
     });
 
@@ -50,7 +56,11 @@ describe('buildMonthlyPartitionPlan', () => {
   });
 
   describe('Given:a reference date on a December year boundary, When:building the plan', () => {
-    const plan = buildMonthlyPartitionPlan('task_status_history', new Date('2026-12-05T00:00:00Z'), 3);
+    const plan = buildMonthlyPartitionPlan(
+      'task_status_history',
+      new Date('2026-12-05T00:00:00Z'),
+      3,
+    );
 
     it('should roll the month and year over correctly for every future partition', () => {
       expect(plan.map((range) => range.partitionName)).toEqual([
@@ -69,7 +79,11 @@ describe('buildMonthlyPartitionPlan', () => {
 
   describe('Given:a reference date mid-month, When:building the plan', () => {
     it('should anchor every range to the first day of its month, ignoring the day-of-month', () => {
-      const plan = buildMonthlyPartitionPlan('task_status_history', new Date('2026-03-17T23:59:59Z'), 0);
+      const plan = buildMonthlyPartitionPlan(
+        'task_status_history',
+        new Date('2026-03-17T23:59:59Z'),
+        0,
+      );
 
       expect(plan).toEqual([
         {
@@ -83,7 +97,11 @@ describe('buildMonthlyPartitionPlan', () => {
 
   describe('Given:a single-digit month, When:naming its partition', () => {
     it('should zero-pad the month segment', () => {
-      const plan = buildMonthlyPartitionPlan('task_status_history', new Date('2026-01-01T00:00:00Z'), 0);
+      const plan = buildMonthlyPartitionPlan(
+        'task_status_history',
+        new Date('2026-01-01T00:00:00Z'),
+        0,
+      );
 
       expect(rangeAt(plan, 0).partitionName).toBe('task_status_history_2026_01');
     });
