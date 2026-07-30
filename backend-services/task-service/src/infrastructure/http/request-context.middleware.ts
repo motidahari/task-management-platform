@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@core/shared';
 import type { NextFunction, Request, Response } from 'express';
 
+import { routePathOf } from './route-path.util';
+
 const REQUEST_ID_HEADER = 'x-request-id';
 const REQUEST_ID_MAX_LENGTH = 128;
 /** Safe for both a log line and an outgoing HTTP header value — no control characters, no separators. */
@@ -10,11 +12,6 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 interface RequestWithId extends Request {
   id?: string;
-}
-
-/** Express types `req.route` as `any` — narrow it explicitly before reading it. */
-interface RouteLike {
-  readonly path?: string;
 }
 
 /**
@@ -50,12 +47,6 @@ export function requestContextMiddleware(
 
     next();
   };
-}
-
-function routePathOf(req: Request): string {
-  const route = req.route as RouteLike | undefined;
-
-  return route?.path ?? req.originalUrl;
 }
 
 function incomingRequestId(req: Request): string | undefined {

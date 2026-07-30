@@ -11,6 +11,7 @@ import { DatabaseModule } from './infrastructure/database/database.module';
 import { requestContextMiddleware } from './infrastructure/http/request-context.middleware';
 import { REDIS_CLIENT } from './infrastructure/redis/redis-client.provider';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
     RedisModule,
     DatabaseModule,
     HealthModule,
+    MetricsModule,
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG, REDIS_CLIENT],
       useFactory: (config: AppConfig, redis: Redis) => ({

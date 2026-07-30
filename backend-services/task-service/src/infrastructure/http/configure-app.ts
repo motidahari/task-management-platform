@@ -10,8 +10,9 @@ import type { AppConfig } from '../config/app.config';
 
 const BODY_LIMIT = '100kb';
 const API_PREFIX = 'api/v1';
-// The compose healthcheck hits these two paths directly, with no prefix.
-const PREFIX_EXCLUDED_PATHS = ['health', 'health/ready'];
+// The compose healthcheck hits these two paths directly, with no prefix;
+// a Prometheus scraper expects the metrics endpoint at the same bare path.
+const PREFIX_EXCLUDED_PATHS = ['health', 'health/ready', 'metrics'];
 const DOCS_PATH = 'docs';
 const TRUST_PROXY_HOP_COUNT = 1;
 
