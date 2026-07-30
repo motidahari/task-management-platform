@@ -1,0 +1,54 @@
+name: Auto-update PR branches
+
+# When main advances (a PR merges), merge the new main into every other open
+# PR targeting main. Branches that merge cleanly are brought up to date
+# automatically; any that would conflict are left untouched for a human to
+# resolve. This keeps "Require branches to be up to date before merging"
+# from turning every merge into a manual "Update branch" chore.
+
+on:
+  push:
+    branches: [main]
+
+# update-branch pushes a merge commit onto each PR's head branch.
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-update-pr-branches
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Merge main into open PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update open PR branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          numbers=$(gh pr list --repo "$REPO" --base main --state open \
+            --json number --jq '.[].number')
+
+          if [ -z "$numbers" ]; then
+            echo "No open PRs targeting main."
+            exit 0
+          fi
+
+          for n in $numbers; do
+            echo "::group::PR #$n"
+            # 422 = merge conflict or already up to date — either way, skip
+            # without failing the workflow.
+            if gh api --method PUT \
+                 -H "Accept: application/vnd.github+json" \
+                 "repos/$REPO/pulls/$n/update-branch" >/dev/null 2>&1; then
+              echo "PR #$n: updated to latest main"
+            else
+              echo "PR #$n: left as-is (already current or conflicts — needs manual resolution)"
+            fi
+            echo "::endgroup::"
+          done
