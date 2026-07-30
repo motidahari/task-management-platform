@@ -1,26 +1,19 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-import { buildLocaleResources, type LocaleDictionary } from './localeResources';
+import en from './locales/en.json';
 
 /**
- * Collects every co-located `locales/en.json` file at build time and merges
- * them into one resource tree — moving a component moves its text with it,
- * nothing to register centrally.
+ * The whole app's user-visible text lives in one dictionary per language,
+ * keyed at the top level by the component/store/composable/type that owns it.
+ * Add a new language by dropping a sibling `<lang>.json` and registering it
+ * in `resources` below.
  */
-const localeModules = import.meta.glob<{ default: LocaleDictionary }>('/src/**/locales/en.json', {
-  eager: true,
-});
-
-const dictionariesByPath: Record<string, LocaleDictionary> = Object.fromEntries(
-  Object.entries(localeModules).map(([path, dictionaryModule]) => [path, dictionaryModule.default]),
-);
-
 void i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: 'en',
   resources: {
-    en: { translation: buildLocaleResources(dictionariesByPath) },
+    en: { translation: en },
   },
   // React already escapes rendered output — double-escaping would corrupt entities.
   interpolation: { escapeValue: false },
