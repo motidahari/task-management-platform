@@ -1,0 +1,5 @@
+{
+  "loading": "Loading task types…",
+  "error-message": "We couldn't load task types. Please try again.",
+  "retry-button": "Retry"
+}
