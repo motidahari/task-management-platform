@@ -7,13 +7,20 @@ name: Auto-update PR branches
 # from turning every merge into a manual "Update branch" chore.
 #
 # The merge is done with real git (checkout + merge + push) rather than the
-# update-branch REST API. The API always attributes its merge commit to
-# github-actions[bot], and GitHub then requires manual approval before the
-# re-triggered CI run will start. Pushing over git with AUTO_UPDATE_TOKEN
-# attributes the push to that token's user, so CI re-runs automatically with
-# no "action required" gate. Falls back to github.token when the secret is
-# absent (in which case pushes will not re-trigger CI — GitHub's recursion
-# guard — and the branch's checks stay stale until pushed manually).
+# update-branch REST API, which always attributes its merge commit to
+# github-actions[bot]. Both the push token and the commit identity have to be
+# a real user for CI to re-run unattended:
+#
+#   * AUTO_UPDATE_TOKEN authenticates the push. Without it github.token is
+#     used, and GitHub's recursion guard means the push triggers no CI at all.
+#   * The commit author must not be github-actions[bot]. The repository's
+#     fork-PR approval policy is "first_time_contributors", and the bot counts
+#     as one — so a bot-authored head commit parks the re-triggered run at
+#     "action_required" until a maintainer approves it by hand.
+#
+# The identity below is therefore read from whoever owns AUTO_UPDATE_TOKEN,
+# falling back to the bot only when no user token is available (in which case
+# the push would not have re-triggered CI anyway).
 
 on:
   push:
@@ -49,8 +56,16 @@ jobs:
         run: |
           set -uo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if token_owner=$(gh api user --jq '"\(.login) \(.id)"' 2>/dev/null); then
+            read -r login id <<<"$token_owner"
+            git config user.name "$login"
+            git config user.email "$id+$login@users.noreply.github.com"
+            echo "Committing as $login."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            echo "No user token available — committing as github-actions[bot]."
+          fi
 
           git fetch origin main
           git checkout main
