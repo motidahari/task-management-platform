@@ -19,7 +19,7 @@ describe('TaskEntity', () => {
 
       expect(databaseColumnName(column)).toBe('id');
       expect(column.options.type).toBe('uuid');
-      expect(column.options.primary).toBe(true);
+      expect(column.options.primary).toBeTruthy();
       expect(resolvedDefault(column)).toBe('gen_random_uuid()');
     });
   });

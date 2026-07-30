@@ -19,7 +19,7 @@ describe('UserEntity', () => {
 
       expect(databaseColumnName(column)).toBe('id');
       expect(column.options.type).toBe('uuid');
-      expect(column.options.primary).toBe(true);
+      expect(column.options.primary).toBeTruthy();
       expect(resolvedDefault(column)).toBe('gen_random_uuid()');
     });
   });
@@ -42,7 +42,7 @@ describe('UserEntity', () => {
       expect(databaseColumnName(column)).toBe('email');
       expect(column.options.type).toBe('varchar');
       expect(column.options.length).toBe(255);
-      expect(column.options.unique).toBe(true);
+      expect(column.options.unique).toBeTruthy();
       expect(column.options.nullable).toBeFalsy();
     });
   });

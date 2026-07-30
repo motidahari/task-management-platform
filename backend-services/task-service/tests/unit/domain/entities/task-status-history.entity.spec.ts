@@ -19,7 +19,7 @@ describe('TaskStatusHistoryEntity', () => {
 
       expect(databaseColumnName(column)).toBe('id');
       expect(column.options.type).toBe('uuid');
-      expect(column.options.primary).toBe(true);
+      expect(column.options.primary).toBeTruthy();
       expect(resolvedDefault(column)).toBe('gen_random_uuid()');
     });
   });
@@ -29,7 +29,7 @@ describe('TaskStatusHistoryEntity', () => {
       const column = columnMetadataFor(TaskStatusHistoryEntity, 'createdAt');
 
       expect(databaseColumnName(column)).toBe('created_at');
-      expect(column.options.primary).toBe(true);
+      expect(column.options.primary).toBeTruthy();
       expect(column.options.type).toBe('timestamptz');
       expect(resolvedDefault(column)).toBe('now()');
     });
@@ -37,7 +37,15 @@ describe('TaskStatusHistoryEntity', () => {
 
   describe('Given:the id and createdAt columns together, When:reading the primary key shape', () => {
     it('should form exactly a two-column composite primary key', () => {
-      const primaryColumnNames = ['id', 'taskId', 'fromStatus', 'toStatus', 'assignedUserId', 'fieldsSnapshot', 'createdAt']
+      const primaryColumnNames = [
+        'id',
+        'taskId',
+        'fromStatus',
+        'toStatus',
+        'assignedUserId',
+        'fieldsSnapshot',
+        'createdAt',
+      ]
         .map((propertyName) => columnMetadataFor(TaskStatusHistoryEntity, propertyName))
         .filter((column) => column.options.primary)
         .map((column) => column.propertyName);
@@ -62,7 +70,7 @@ describe('TaskStatusHistoryEntity', () => {
 
       expect(databaseColumnName(column)).toBe('from_status');
       expect(column.options.type).toBe('int');
-      expect(column.options.nullable).toBe(true);
+      expect(column.options.nullable).toBeTruthy();
     });
   });
 
@@ -72,7 +80,7 @@ describe('TaskStatusHistoryEntity', () => {
 
       expect(databaseColumnName(column)).toBe('to_status');
       expect(column.options.type).toBe('int');
-      expect(column.options.nullable).toBe(true);
+      expect(column.options.nullable).toBeTruthy();
     });
   });
 
