@@ -14,6 +14,7 @@ import { requestContextMiddleware } from './infrastructure/http/request-context.
 import { REDIS_CLIENT } from './infrastructure/redis/redis-client.provider';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { TaskTypeModule } from './task-type/task-type.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MetricsModule } from './metrics/metrics.module';
     PartitionMaintenanceModule,
     HealthModule,
     MetricsModule,
+    TaskTypeModule,
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG, REDIS_CLIENT],
       useFactory: (config: AppConfig, redis: Redis) => ({
