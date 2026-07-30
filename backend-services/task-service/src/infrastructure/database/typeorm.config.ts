@@ -1,5 +1,8 @@
 import type { DataSourceOptions } from 'typeorm';
 
+import { TaskEntity } from '../../domain/entities/task.entity';
+import { TaskStatusHistoryEntity } from '../../domain/entities/task-status-history.entity';
+import { UserEntity } from '../../domain/entities/user.entity';
 import type { DatabaseConfig, MigrationDatabaseConfig } from '../config/app.config';
 
 /**
@@ -10,8 +13,11 @@ import type { DatabaseConfig, MigrationDatabaseConfig } from '../config/app.conf
  */
 type PostgresDataSourceOptions = Extract<DataSourceOptions, { type: 'postgres' }>;
 
-/** Domain entities are registered here once the entity classes exist. */
-const ENTITIES: PostgresDataSourceOptions['entities'] = [];
+const ENTITIES: PostgresDataSourceOptions['entities'] = [
+  UserEntity,
+  TaskEntity,
+  TaskStatusHistoryEntity,
+];
 
 /** Where the compiled migration runner (the one that ships in the production image) looks for migration files. */
 const COMPILED_MIGRATIONS_GLOB = 'dist/migrations/*.js';
