@@ -1,0 +1,13 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.confirm-modal {
+  &__message {
+    margin: 0 0 vars.$spacing-lg;
+    color: var(--color-text);
+  }
+
+  &__actions {
+    @include mixins.flx($justify: flex-end, $gap: vars.$spacing-sm);
+  }
+}
