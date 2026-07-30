@@ -14,8 +14,10 @@
   "dependencies": {
     "@core/shared": "^0.1.0",
     "axios": "^1.19.0",
+    "i18next": "^26.3.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.11",
     "react-router-dom": "^6.30.4"
   },
   "devDependencies": {
