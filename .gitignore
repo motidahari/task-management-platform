@@ -28,3 +28,6 @@ npm-debug.log*
 
 #claude
 .claude/
+
+# local git worktrees (parallel task branches)
+/worktrees/
