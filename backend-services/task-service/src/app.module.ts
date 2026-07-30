@@ -1,6 +1,7 @@
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { seconds, ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import type { Redis } from 'ioredis';
 
@@ -8,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { APP_CONFIG, type AppConfig } from './infrastructure/config/app.config';
 import { AppConfigModule } from './infrastructure/config/app-config.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
+import { PartitionMaintenanceModule } from './infrastructure/database/partitioning/partition-maintenance.module';
 import { requestContextMiddleware } from './infrastructure/http/request-context.middleware';
 import { REDIS_CLIENT } from './infrastructure/redis/redis-client.provider';
 import { RedisModule } from './infrastructure/redis/redis.module';
@@ -18,6 +20,8 @@ import { MetricsModule } from './metrics/metrics.module';
     AppConfigModule,
     RedisModule,
     DatabaseModule,
+    ScheduleModule.forRoot(),
+    PartitionMaintenanceModule,
     HealthModule,
     MetricsModule,
     ThrottlerModule.forRootAsync({
