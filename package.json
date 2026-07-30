@@ -15,7 +15,7 @@
     "setup": "node scripts/ensure-env-file.mjs",
     "start": "npm run setup && docker compose up -d --build",
     "stop": "docker compose down",
-    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w backend-services/task-service\" \"npm run dev -w frontend-application/task-app\"",
+    "dev": "npm run setup && concurrently -n api,web -c blue,green \"npm run dev -w backend-services/task-service\" \"npm run dev -w frontend-application/task-app\"",
     "lint": "npm run lint --workspaces --if-present && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",
