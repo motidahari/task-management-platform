@@ -5,15 +5,23 @@ name: Auto-update PR branches
 # automatically; any that would conflict are left untouched for a human to
 # resolve. This keeps "Require branches to be up to date before merging"
 # from turning every merge into a manual "Update branch" chore.
+#
+# The merge is done with real git (checkout + merge + push) rather than the
+# update-branch REST API. The API always attributes its merge commit to
+# github-actions[bot], and GitHub then requires manual approval before the
+# re-triggered CI run will start. Pushing over git with AUTO_UPDATE_TOKEN
+# attributes the push to that token's user, so CI re-runs automatically with
+# no "action required" gate. Falls back to github.token when the secret is
+# absent (in which case pushes will not re-trigger CI — GitHub's recursion
+# guard — and the branch's checks stay stale until pushed manually).
 
 on:
   push:
     branches: [main]
 
-# update-branch pushes a merge commit onto each PR's head branch.
 permissions:
   contents: write
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
   group: auto-update-pr-branches
@@ -24,37 +32,62 @@ jobs:
     name: Merge main into open PRs
     runs-on: ubuntu-latest
     steps:
-      - name: Update open PR branches
-        # Prefer a user/App token (secret AUTO_UPDATE_TOKEN) so the merge
-        # commits it pushes are attributed to a trusted actor and re-trigger CI
-        # on the updated branches. The default github.token works too, but its
-        # pushes do not start new workflow runs (GitHub's recursion guard), so
-        # auto-updated branches would sit with stale checks. Falls back to
-        # github.token when the secret is absent.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so merges have every commit they need.
+          fetch-depth: 0
+          # This token authenticates the pushes below. When it is a
+          # user/App PAT (AUTO_UPDATE_TOKEN), the resulting pushes are
+          # attributed to that actor and re-trigger CI without approval.
+          token: ${{ secrets.AUTO_UPDATE_TOKEN || github.token }}
+
+      - name: Merge main into open PR branches
         env:
           GH_TOKEN: ${{ secrets.AUTO_UPDATE_TOKEN || github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
 
-          numbers=$(gh pr list --repo "$REPO" --base main --state open \
-            --json number --jq '.[].number')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ -z "$numbers" ]; then
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          branches=$(gh pr list --repo "$REPO" --base main --state open \
+            --json headRefName --jq '.[].headRefName')
+
+          if [ -z "$branches" ]; then
             echo "No open PRs targeting main."
             exit 0
           fi
 
-          for n in $numbers; do
-            echo "::group::PR #$n"
-            # 422 = merge conflict or already up to date — either way, skip
-            # without failing the workflow.
-            if gh api --method PUT \
-                 -H "Accept: application/vnd.github+json" \
-                 "repos/$REPO/pulls/$n/update-branch" >/dev/null 2>&1; then
-              echo "PR #$n: updated to latest main"
-            else
-              echo "PR #$n: left as-is (already current or conflicts — needs manual resolution)"
+          for branch in $branches; do
+            echo "::group::$branch"
+
+            if ! git fetch origin "$branch"; then
+              echo "$branch: could not fetch — skipping"
+              echo "::endgroup::"
+              continue
             fi
+
+            git checkout -B "$branch" "origin/$branch"
+
+            if git merge --no-edit origin/main; then
+              if git diff --quiet "origin/$branch" HEAD; then
+                echo "$branch: already up to date"
+              elif git push origin "$branch"; then
+                echo "$branch: updated to latest main"
+              else
+                echo "$branch: push failed — skipping"
+              fi
+            else
+              git merge --abort
+              echo "$branch: conflicts with main — needs manual resolution"
+            fi
+
+            git checkout --force main
             echo "::endgroup::"
           done
