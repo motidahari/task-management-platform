@@ -19,7 +19,7 @@ export interface TaskTypesGateProps {
  * renders plain elements rather than depending on components that don't exist.
  */
 export function TaskTypesGate({ children }: TaskTypesGateProps): ReactElement {
-  const { t } = useTranslation('tasks.task-types-gate');
+  const { t } = useTranslation('task-types-gate');
   const status = useTaskTypeStore((state) => state.status);
   const loadTaskTypes = useTaskTypeStore((state) => state.loadTaskTypes);
 
