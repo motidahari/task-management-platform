@@ -2,8 +2,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 import { buildMonthlyPartitionPlan } from './support/monthly-partition-plan';
 
-const HISTORY_TABLE = 'task_status_history';
-
 /**
  * How far ahead of the current month the initial migration provisions
  * partitions. A daily scheduled job (outside this migration's scope) tops
@@ -32,7 +30,7 @@ export class InitSchema1700000000001 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Dropping a partitioned parent table drops all of its partitions with
     // it, so the per-partition tables never need to be named here.
-    await queryRunner.query(`DROP TABLE IF EXISTS ${HISTORY_TABLE}`);
+    await queryRunner.query(`DROP TABLE IF EXISTS task_status_history`);
     await queryRunner.query('DROP TABLE IF EXISTS tasks');
     await queryRunner.query('DROP TABLE IF EXISTS users');
   }
@@ -89,7 +87,7 @@ export class InitSchema1700000000001 implements MigrationInterface {
     // inside the primary key, even though id alone is already globally
     // unique.
     await queryRunner.query(`
-      CREATE TABLE ${HISTORY_TABLE} (
+      CREATE TABLE task_status_history (
         id uuid NOT NULL DEFAULT gen_random_uuid(),
         task_id uuid NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
         from_status int,
@@ -112,7 +110,7 @@ export class InitSchema1700000000001 implements MigrationInterface {
     // every partition attached afterwards inherits it automatically.
     await queryRunner.query(`
       CREATE INDEX idx_history_task
-        ON ${HISTORY_TABLE} (task_id, created_at, id)
+        ON task_status_history (task_id, created_at, id)
     `);
   }
 
@@ -126,11 +124,15 @@ export class InitSchema1700000000001 implements MigrationInterface {
    * it should have gone to.
    */
   private async createInitialHistoryPartitions(queryRunner: QueryRunner): Promise<void> {
-    const partitionPlan = buildMonthlyPartitionPlan(HISTORY_TABLE, new Date(), FUTURE_MONTHS_AHEAD);
+    const partitionPlan = buildMonthlyPartitionPlan(
+      'task_status_history',
+      new Date(),
+      FUTURE_MONTHS_AHEAD,
+    );
 
     for (const range of partitionPlan) {
       await queryRunner.query(`
-        CREATE TABLE ${range.partitionName} PARTITION OF ${HISTORY_TABLE}
+        CREATE TABLE ${range.partitionName} PARTITION OF task_status_history
           FOR VALUES FROM ('${range.rangeStartInclusive}') TO ('${range.rangeEndExclusive}')
       `);
     }
