@@ -142,9 +142,7 @@ describe('TaskTypeDefinition contract', () => {
       };
 
       expect('finalStatus' in definition).toBe(false);
-      expect(definition.statuses[definition.statuses.length - 1]?.name).toBe(
-        'purchase-completed',
-      );
+      expect(definition.statuses[definition.statuses.length - 1]?.name).toBe('purchase-completed');
     });
   });
 });
