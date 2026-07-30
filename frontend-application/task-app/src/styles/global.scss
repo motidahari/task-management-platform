@@ -1,0 +1,36 @@
+@use 'variables' as vars;
+@use 'mixins';
+@use 'themes';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition:
+    background-color vars.$transition-normal,
+    color vars.$transition-normal;
+}
+
+.app-placeholder {
+  @include mixins.flx($direction: column, $justify: center, $align: center, $gap: vars.$spacing-md);
+  min-height: 100%;
+  padding: vars.$spacing-xl;
+  text-align: center;
+
+  @include mixins.respond(vars.$breakpoint-desktop) {
+    padding: vars.$spacing-xl * 2;
+  }
+}
