@@ -1,7 +1,18 @@
 name: task-management-platform
 
+# Services log to stdout/stderr; Docker's json-file driver is what persists
+# them, and it grows without bound by default. Capping size and file count
+# means a long-running or noisy container can never fill the disk — the
+# oldest slice is dropped instead.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   postgres:
+    logging: *bounded-logging
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?copy .env.example to .env first}
@@ -19,6 +30,7 @@ services:
       start_period: 10s
 
   redis:
+    logging: *bounded-logging
     image: redis:7-alpine
     ports:
       - '${REDIS_PORT:-6379}:6379'
@@ -31,6 +43,7 @@ services:
       retries: 10
 
   migrate:
+    logging: *bounded-logging
     image: task-management-platform/task-service:local
     build:
       context: .
@@ -45,6 +58,7 @@ services:
         condition: service_healthy
 
   backend:
+    logging: *bounded-logging
     image: task-management-platform/task-service:local
     build:
       context: .
@@ -79,6 +93,7 @@ services:
       start_period: 20s
 
   frontend:
+    logging: *bounded-logging
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
