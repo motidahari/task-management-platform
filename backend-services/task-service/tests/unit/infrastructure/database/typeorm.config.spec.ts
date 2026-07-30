@@ -45,6 +45,10 @@ describe('buildWriteDataSourceOptions', () => {
       expect(options.poolSize).toBe(10);
       expect(options.extra).toEqual({ statement_timeout: 5000, lock_timeout: 2000 });
     });
+
+    it('should log any statement over the 1s slow-query threshold', () => {
+      expect(buildWriteDataSourceOptions(DATABASE).maxQueryExecutionTime).toBe(1000);
+    });
   });
 });
 
@@ -78,6 +82,10 @@ describe('buildReadDataSourceOptions', () => {
 
       expect(options.poolSize).toBe(10);
       expect(options.extra).toEqual({ statement_timeout: 5000, lock_timeout: 2000 });
+    });
+
+    it('should log any statement over the 1s slow-query threshold', () => {
+      expect(buildReadDataSourceOptions(DATABASE).maxQueryExecutionTime).toBe(1000);
     });
   });
 });
@@ -113,6 +121,12 @@ describe('buildMigrationDataSourceOptions', () => {
 
       expect(options.synchronize).toBe(false);
       expect(options.migrationsRun).toBe(false);
+    });
+
+    it('should not flag long-running DDL as a slow query', () => {
+      expect(
+        buildMigrationDataSourceOptions(MIGRATION_DATABASE).maxQueryExecutionTime,
+      ).toBeUndefined();
     });
   });
 });
