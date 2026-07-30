@@ -1,0 +1,17 @@
+// Static (compile-time) design tokens — geometry only. Colors are runtime
+// CSS custom properties in _themes.scss; a component referencing a hex
+// literal fails review.
+$spacing-xs: 0.25rem;
+$spacing-sm: 0.5rem;
+$spacing-md: 1rem;
+$spacing-lg: 1.5rem;
+$spacing-xl: 2rem;
+
+$breakpoint-tablet: 600px;
+$breakpoint-desktop: 900px;
+
+$radius-sm: 6px;
+$radius-md: 10px;
+
+$transition-fast: 0.15s ease;
+$transition-normal: 0.25s ease;

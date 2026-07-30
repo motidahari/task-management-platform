@@ -1,0 +1,20 @@
+// flx(): shorthand for the flex declarations every layout needs.
+@mixin flx($direction: row, $justify: flex-start, $align: stretch, $wrap: nowrap, $gap: null) {
+  display: flex;
+  flex-direction: $direction;
+  justify-content: $justify;
+  align-items: $align;
+  flex-wrap: $wrap;
+
+  @if $gap != null {
+    gap: $gap;
+  }
+}
+
+// respond(): mobile-first breakpoint helper — pass one of the
+// $breakpoint-* variables from _variables.scss.
+@mixin respond($breakpoint) {
+  @media (min-width: $breakpoint) {
+    @content;
+  }
+}

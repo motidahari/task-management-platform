@@ -1,0 +1,29 @@
+// Runtime theming: compile-time SCSS variables can't switch at runtime, so
+// colors live here as CSS custom properties and are consumed everywhere via
+// var(--color-*). useThemeStore (later task) stamps data-theme on <html>;
+// index.html defaults to 'dark' until that store lands.
+:root[data-theme='dark'] {
+  --color-bg: #1d2125;
+  --color-bg-card: #22272b;
+  --color-bg-elevated: #282e33;
+  --color-border: #38414a;
+  --color-text: #dee4ea;
+  --color-text-secondary: #8c9bab;
+  --color-primary: #579dff;
+  --color-primary-hover: #85b8ff;
+  --color-danger: #f87168;
+  --color-warning: #f5cd47;
+}
+
+:root[data-theme='light'] {
+  --color-bg: #f7f8f9;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #f1f2f4;
+  --color-border: #dcdfe4;
+  --color-text: #172b4d;
+  --color-text-secondary: #626f86;
+  --color-primary: #0c66e4;
+  --color-primary-hover: #0055cc;
+  --color-danger: #c9372c;
+  --color-warning: #e56910;
+}
