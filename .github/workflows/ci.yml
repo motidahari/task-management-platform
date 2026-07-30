@@ -61,6 +61,11 @@ jobs:
           echo "$changed" | grep -qE '^backend-services/task-service/' && backend=true || true
           echo "$changed" | grep -qE '^frontend-application/' && frontend=true || true
 
+          # A workspace that does not exist on this ref cannot be tested — the
+          # fan-out rule above can flag one before its scaffold has landed.
+          [ -f backend-services/task-service/package.json ] || backend=false
+          [ -f frontend-application/task-app/package.json ] || frontend=false
+
           echo "backend=$backend" >> "$GITHUB_OUTPUT"
           echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
           echo "Resolved affected: backend=$backend frontend=$frontend"
