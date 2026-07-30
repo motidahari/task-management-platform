@@ -11,6 +11,7 @@ import { APP_CONFIG, type AppConfig } from '../../src/infrastructure/config/app.
 import { DatabaseModule, READ_CONNECTION } from '../../src/infrastructure/database/database.module';
 import { configureApp } from '../../src/infrastructure/http/configure-app';
 import { REDIS_CLIENT } from '../../src/infrastructure/redis/redis-client.provider';
+import { REALTIME_REDIS_ADAPTER } from '../../src/realtime/redis-adapter.provider';
 
 const ALLOWED_ORIGIN = 'http://allowed.example.com';
 const DISALLOWED_ORIGIN = 'http://not-allowed.example.com';
@@ -29,6 +30,7 @@ const BASE_CONFIG: AppConfig = {
   redisUrl: 'redis://localhost:6379',
   corsOrigins: [ALLOWED_ORIGIN],
   throttle: { ttlSec: 60, limit: 100 },
+  realtime: { maxConnections: 1000 },
 };
 
 const fakeDataSource = {
@@ -69,6 +71,20 @@ const fakeRedisClient: Redis = Object.assign(Object.create(Redis.prototype) as R
   quit: jest.fn().mockResolvedValue('OK'),
 });
 
+/**
+ * The realtime gateway otherwise opens two real `ioredis` connections of its
+ * own (pub/sub, distinct from `REDIS_CLIENT`) on every boot — a plain stand-in
+ * for its `adapterConstructor` output keeps this suite off live Redis too.
+ * Socket.IO instantiates this per namespace and awaits `init()`, so the fake
+ * needs that one method to satisfy the namespace's own bootstrap, not just
+ * the shape of `RealtimeRedisAdapterFactory`.
+ */
+class FakeSocketIoAdapter {
+  init(): void {}
+}
+
+const fakeRealtimeRedisAdapter = { adapterConstructor: FakeSocketIoAdapter };
+
 /** Boots the real `AppModule` wiring with the DB and Redis connections swapped for fakes — no live Postgres or Redis. */
 async function bootTestApp(config: AppConfig): Promise<NestExpressApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -78,6 +94,8 @@ async function bootTestApp(config: AppConfig): Promise<NestExpressApplication> {
     .useModule(FakeDatabaseModule)
     .overrideProvider(REDIS_CLIENT)
     .useValue(fakeRedisClient)
+    .overrideProvider(REALTIME_REDIS_ADAPTER)
+    .useValue(fakeRealtimeRedisAdapter)
     .compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>();

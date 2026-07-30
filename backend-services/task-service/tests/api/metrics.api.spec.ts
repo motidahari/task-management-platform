@@ -17,6 +17,7 @@ import {
   REQUEST_DURATION_HISTOGRAM_NAME,
   SOCKET_CONNECTIONS_GAUGE_NAME,
 } from '../../src/metrics/metrics.constants';
+import { REALTIME_REDIS_ADAPTER } from '../../src/realtime/redis-adapter.provider';
 
 const BASE_CONFIG: AppConfig = {
   nodeEnv: 'test',
@@ -32,6 +33,7 @@ const BASE_CONFIG: AppConfig = {
   redisUrl: 'redis://localhost:6379',
   corsOrigins: ['http://allowed.example.com'],
   throttle: { ttlSec: 60, limit: 100 },
+  realtime: { maxConnections: 1000 },
 };
 
 const fakeDataSource = {
@@ -54,6 +56,18 @@ const fakeRedisClient: Redis = Object.assign(Object.create(Redis.prototype) as R
   quit: jest.fn().mockResolvedValue('OK'),
 });
 
+/**
+ * Same rationale as `bootstrap.api.spec.ts` — keeps the realtime gateway off
+ * live Redis too. Socket.IO instantiates this per namespace and awaits
+ * `init()`, so the fake needs that one method to satisfy the namespace's own
+ * bootstrap, not just the shape of `RealtimeRedisAdapterFactory`.
+ */
+class FakeSocketIoAdapter {
+  init(): void {}
+}
+
+const fakeRealtimeRedisAdapter = { adapterConstructor: FakeSocketIoAdapter };
+
 async function bootTestApp(): Promise<NestExpressApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(APP_CONFIG)
@@ -62,6 +76,8 @@ async function bootTestApp(): Promise<NestExpressApplication> {
     .useModule(FakeDatabaseModule)
     .overrideProvider(REDIS_CLIENT)
     .useValue(fakeRedisClient)
+    .overrideProvider(REALTIME_REDIS_ADAPTER)
+    .useValue(fakeRealtimeRedisAdapter)
     .compile();
 
   const app = moduleRef.createNestApplication<NestExpressApplication>();
