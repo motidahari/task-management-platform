@@ -17,6 +17,15 @@ const ENTITIES: PostgresDataSourceOptions['entities'] = [];
 const COMPILED_MIGRATIONS_GLOB = 'dist/migrations/*.js';
 
 /**
+ * Any statement over this threshold is logged as a slow query — the signal
+ * that turns "the DB feels slow" into "this exact statement, this long".
+ * Left off the migration DataSource: migrations legitimately run for
+ * minutes (see its `statement_timeout: 0`), so flagging them as slow would
+ * just be noise on every deploy.
+ */
+const SLOW_QUERY_THRESHOLD_MS = 1000;
+
+/**
  * All mutations and locking reads — the connection that must see committed
  * primary state.
  */
@@ -32,6 +41,7 @@ export function buildWriteDataSourceOptions(database: DatabaseConfig): PostgresD
     entities: ENTITIES,
     synchronize: false,
     migrationsRun: false,
+    maxQueryExecutionTime: SLOW_QUERY_THRESHOLD_MS,
   };
 }
 
@@ -53,6 +63,7 @@ export function buildReadDataSourceOptions(database: DatabaseConfig): PostgresDa
     entities: ENTITIES,
     synchronize: false,
     migrationsRun: false,
+    maxQueryExecutionTime: SLOW_QUERY_THRESHOLD_MS,
   };
 }
 
