@@ -40,3 +40,16 @@ export interface TaskTypeDefinition {
   readonly finalStatus: number;
   readonly statuses: readonly StatusDefinition[];
 }
+
+/** A single task resource, as returned by every task endpoint. */
+export interface Task {
+  readonly id: string;
+  readonly type: string;
+  readonly status: number;
+  readonly statusName: string;
+  readonly isClosed: boolean;
+  readonly assignedUserId: string;
+  readonly customFields: Readonly<Record<string, unknown>>;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
