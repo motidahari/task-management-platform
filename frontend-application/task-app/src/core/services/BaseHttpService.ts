@@ -1,4 +1,5 @@
-import { ErrorCode, errorCodeName, type ErrorResponse } from '@core/shared';
+import { ErrorCode, errorCodeName } from '@core/shared/error-codes';
+import type { ErrorResponse } from '@core/shared/errors/error-response';
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 
 import { appConfig } from '../config/app.config';

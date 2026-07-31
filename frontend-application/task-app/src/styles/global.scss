@@ -49,3 +49,24 @@ body {
     padding: vars.$spacing-xl * 2;
   }
 }
+
+// Fatal boot screen when environment configuration is missing. Renders in
+// place of the app, so a misconfigured build shows the real problem rather
+// than a blank page.
+.config-error {
+  @include mixins.flx($direction: column, $justify: center, $align: center, $gap: vars.$spacing-sm);
+  min-height: 100%;
+  padding: vars.$spacing-xl;
+  text-align: center;
+
+  &__title {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  &__message {
+    margin: 0;
+    max-width: 40rem;
+    color: var(--color-text);
+  }
+}
