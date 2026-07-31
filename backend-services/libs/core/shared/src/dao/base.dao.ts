@@ -5,7 +5,15 @@ import type {
   EntityTarget,
   ObjectLiteral,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
+
+import {
+  type CursorPage,
+  decodeKeysetCursor,
+  encodeKeysetCursor,
+  type KeysetCursor,
+} from './keyset-cursor';
 
 /**
  * Translation boundary between persistence and the domain: entities never cross
@@ -43,5 +51,57 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
 
   protected toDomainModels(entities: readonly TEntity[]): TDomain[] {
     return entities.map((entity) => this.toDomainModel(entity));
+  }
+
+  /**
+   * One keyset-paginated page over a `(createdAt, id)` ordering, mapped to the
+   * domain model. The ordering columns, the over-fetch-by-one that detects a
+   * next page, and the cursor round-trip are identical across every listing —
+   * only the alias, sort direction and row filter differ, so those are the
+   * only knobs a caller supplies.
+   *
+   * `direction` fixes the comparison too: a `DESC` page walks strictly
+   * *before* the cursor (`<`), an `ASC` page strictly *after* it (`>`). `id`
+   * is the tie-breaker on rows sharing one `createdAt`, so a page boundary
+   * landing between two same-millisecond rows neither skips nor repeats one.
+   *
+   * Reads run on the replica-capable connection — keyset listings tolerate lag.
+   */
+  protected async findKeysetPage(params: {
+    alias: string;
+    direction: 'ASC' | 'DESC';
+    limit: number;
+    cursor: string | undefined;
+    applyFilter: (queryBuilder: SelectQueryBuilder<TEntity>) => void;
+    keyOf: (entity: TEntity) => KeysetCursor;
+  }): Promise<CursorPage<TDomain>> {
+    const { alias, direction, limit, cursor, applyFilter, keyOf } = params;
+    const afterCursor = cursor === undefined ? null : decodeKeysetCursor(cursor);
+    const comparator = direction === 'DESC' ? '<' : '>';
+
+    const queryBuilder = this.readRepository
+      .createQueryBuilder(alias)
+      .orderBy(`${alias}.createdAt`, direction)
+      .addOrderBy(`${alias}.id`, direction)
+      .take(limit + 1);
+
+    applyFilter(queryBuilder);
+
+    if (afterCursor) {
+      queryBuilder.andWhere(
+        `(${alias}.createdAt, ${alias}.id) ${comparator} (:cursorCreatedAt, :cursorId)`,
+        { cursorCreatedAt: afterCursor.createdAt, cursorId: afterCursor.id },
+      );
+    }
+
+    const rows = await queryBuilder.getMany();
+    const hasNextPage = rows.length > limit;
+    const pageRows = hasNextPage ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+
+    return {
+      items: this.toDomainModels(pageRows),
+      nextCursor: hasNextPage && lastRow ? encodeKeysetCursor(keyOf(lastRow)) : null,
+    };
   }
 }
