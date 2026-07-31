@@ -44,16 +44,7 @@ export class TaskService {
         manager,
       );
 
-      await this.taskStatusHistoryDao.append(
-        {
-          taskId: task.id,
-          fromStatus: null,
-          toStatus: task.status,
-          assignedUserId: task.assignedUserId,
-          fieldsSnapshot: {},
-        },
-        manager,
-      );
+      await this.taskStatusHistoryDao.appendCreation(task, manager);
 
       return task;
     });

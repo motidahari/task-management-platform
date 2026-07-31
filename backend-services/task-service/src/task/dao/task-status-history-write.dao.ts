@@ -4,6 +4,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 
 import { READ_CONNECTION } from '../../infrastructure/database/database.module';
 import { TaskStatusHistoryDao, TaskStatusHistoryEntry } from '../../domain/task-status-history.dao';
+import { Task } from '../../domain/task.model';
 
 /**
  * Adds the one write path `TaskStatusHistoryDao` doesn't expose: appending a
@@ -37,5 +38,24 @@ export class TaskStatusHistoryWriteDao extends TaskStatusHistoryDao {
     manager: EntityManager,
   ): Promise<TaskStatusHistoryEntry> {
     return await this.insertOne(entry, manager);
+  }
+
+  /**
+   * Appends the creation entry for a task that was just inserted — derived
+   * entirely from that task, so the caller never assembles a history row by
+   * hand. `fromStatus: null` marks this as the creation transition; the
+   * snapshot is the task's own custom fields at the moment it was made.
+   */
+  async appendCreation(task: Task, manager: EntityManager): Promise<TaskStatusHistoryEntry> {
+    return await this.append(
+      {
+        taskId: task.id,
+        fromStatus: null,
+        toStatus: task.status,
+        assignedUserId: task.assignedUserId,
+        fieldsSnapshot: task.customFields,
+      },
+      manager,
+    );
   }
 }

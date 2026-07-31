@@ -42,7 +42,7 @@ interface TaskServiceHarness {
   service: TaskService;
   transactionMock: jest.Mock;
   taskDao: { create: jest.Mock };
-  taskStatusHistoryDao: { append: jest.Mock };
+  taskStatusHistoryDao: { appendCreation: jest.Mock };
   assigneeExistenceDao: { existsById: jest.Mock };
   taskTypeRegistry: { findByType: jest.Mock };
 }
@@ -50,7 +50,7 @@ interface TaskServiceHarness {
 function taskServiceHarness(
   overrides: Partial<{
     taskDao: { create: jest.Mock };
-    taskStatusHistoryDao: { append: jest.Mock };
+    taskStatusHistoryDao: { appendCreation: jest.Mock };
     assigneeExistenceDao: { existsById: jest.Mock };
     taskTypeRegistry: { findByType: jest.Mock };
   }> = {},
@@ -61,7 +61,7 @@ function taskServiceHarness(
   );
   const taskDao = overrides.taskDao ?? { create: jest.fn().mockResolvedValue(fakeTask()) };
   const taskStatusHistoryDao = overrides.taskStatusHistoryDao ?? {
-    append: jest.fn().mockResolvedValue(undefined),
+    appendCreation: jest.fn().mockResolvedValue(undefined),
   };
   const assigneeExistenceDao = overrides.assigneeExistenceDao ?? {
     existsById: jest.fn().mockResolvedValue(true),
@@ -114,14 +114,11 @@ describe('TaskService', () => {
         { type: 'procurement', assignedUserId: ASSIGNEE_ID },
         TRANSACTION_MANAGER,
       );
-      expect(taskStatusHistoryDao.append).toHaveBeenCalledWith(
-        {
-          taskId: 'new-task-id',
-          fromStatus: null,
-          toStatus: 1,
-          assignedUserId: ASSIGNEE_ID,
-          fieldsSnapshot: {},
-        },
+      // The service hands the DAO the whole task and nothing else — it does
+      // not know (or assemble) the history row's field layout; that is the
+      // DAO's job in `appendCreation`.
+      expect(taskStatusHistoryDao.appendCreation).toHaveBeenCalledWith(
+        insertedTask,
         TRANSACTION_MANAGER,
       );
     });
@@ -139,7 +136,7 @@ describe('TaskService', () => {
 
       expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
       expect(taskDao.create).not.toHaveBeenCalled();
-      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.appendCreation).not.toHaveBeenCalled();
     });
   });
 
@@ -154,7 +151,7 @@ describe('TaskService', () => {
       ).rejects.toThrow(AssigneeNotFoundException);
 
       expect(taskDao.create).not.toHaveBeenCalled();
-      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.appendCreation).not.toHaveBeenCalled();
     });
   });
 
@@ -162,7 +159,7 @@ describe('TaskService', () => {
     it('should propagate the failure out of the transaction rather than returning a task', async () => {
       const failure = new Error('constraint violation');
       const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
-        taskStatusHistoryDao: { append: jest.fn().mockRejectedValue(failure) },
+        taskStatusHistoryDao: { appendCreation: jest.fn().mockRejectedValue(failure) },
       });
 
       await expect(
@@ -175,7 +172,7 @@ describe('TaskService', () => {
       // neither row committed, rather than the service catching it and
       // leaving the task row stranded without its history entry.
       expect(taskDao.create).toHaveBeenCalledTimes(1);
-      expect(taskStatusHistoryDao.append).toHaveBeenCalledTimes(1);
+      expect(taskStatusHistoryDao.appendCreation).toHaveBeenCalledTimes(1);
     });
   });
 });
