@@ -54,6 +54,23 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
   }
 
   /**
+   * Inserts one row and maps it back to the domain model in a single step —
+   * the save-then-map round trip every write DAO otherwise repeats. Always
+   * bound to the caller's transaction `manager`, never opened as a fresh
+   * connection, so the insert commits (or rolls back) with whatever else
+   * that transaction does.
+   */
+  protected async insertOne(
+    partial: DeepPartial<TEntity>,
+    manager: EntityManager,
+  ): Promise<TDomain> {
+    const repository = this.repositoryFor(manager);
+    const entity = await repository.save(repository.create(partial));
+
+    return this.toDomainModel(entity);
+  }
+
+  /**
    * One keyset-paginated page over a `(createdAt, id)` ordering, mapped to the
    * domain model. The ordering columns, the over-fetch-by-one that detects a
    * next page, and the cursor round-trip are identical across every listing —

@@ -15,6 +15,7 @@ import { REDIS_CLIENT } from './infrastructure/redis/redis-client.provider';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { TaskModule } from './task/task.module';
 import { TaskTypeModule } from './task-type/task-type.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { TaskTypeModule } from './task-type/task-type.module';
     MetricsModule,
     RealtimeModule,
     TaskTypeModule,
+    TaskModule,
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG, REDIS_CLIENT],
       useFactory: (config: AppConfig, redis: Redis) => ({
