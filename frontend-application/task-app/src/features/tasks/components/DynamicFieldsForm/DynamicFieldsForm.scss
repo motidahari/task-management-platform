@@ -1,0 +1,6 @@
+@use '../../../../styles/variables' as vars;
+@use '../../../../styles/mixins';
+
+.dynamic-fields-form {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+}
