@@ -34,8 +34,19 @@ const BASE_CONFIG: AppConfig = {
   throttle: { ttlSec: 60, limit: 100 },
 };
 
+/**
+ * Answers the readiness probe (`SELECT 1`) with a trivial row and the task
+ * type registry's persisted-types check with no rows — an empty `tasks`
+ * table is always a subset of the registry, so bootstrap never fails here.
+ */
 const fakeDataSource = {
-  query: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
+  query: jest.fn().mockImplementation((sql: string) => {
+    if (sql.includes('DISTINCT type')) {
+      return Promise.resolve([]);
+    }
+
+    return Promise.resolve([{ '?column?': 1 }]);
+  }),
 } as unknown as DataSource;
 
 /** Same rationale as `bootstrap.api.spec.ts` — see that file for why the whole module is swapped instead of an in-place provider override. */
