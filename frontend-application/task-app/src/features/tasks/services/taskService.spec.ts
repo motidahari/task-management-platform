@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChangeTaskStatusDto, CreateTaskDto, Task, TaskListPage } from '../types';
+import type { Task } from '../types';
 import { TaskService } from './taskService';
+import type { ChangeTaskStatusDto, CreateTaskDto, TaskListPage } from './taskService.dto';
 
 const { httpMockInstance, createMock } = vi.hoisted(() => {
   const instance = {

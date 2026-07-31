@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiError } from '../../../core/types/api-error';
 import { taskService } from '../services/taskService';
-import type { ChangeTaskStatusDto, CreateTaskDto, Task, TaskListPage } from '../types';
+import type { ChangeTaskStatusDto, CreateTaskDto, TaskListPage } from '../services/taskService.dto';
+import type { Task } from '../types';
 import { useTaskStore } from './useTaskStore';
 
 const { emitMock } = vi.hoisted(() => ({ emitMock: vi.fn() }));

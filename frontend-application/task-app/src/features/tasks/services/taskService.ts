@@ -1,11 +1,11 @@
 import { BaseHttpService } from '../../../core/services/BaseHttpService';
+import type { Task } from '../types';
 import type {
   ChangeTaskStatusDto,
   CreateTaskDto,
-  Task,
   TaskListFilters,
   TaskListPage,
-} from '../types';
+} from './taskService.dto';
 
 interface ListTasksForUserParams extends TaskListFilters {
   readonly limit?: number;

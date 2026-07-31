@@ -6,7 +6,12 @@ import i18n from '../../../core/i18n';
 import type { ApiError } from '../../../core/types/api-error';
 import { resolveErrorText } from '../../../shared/utils/resolveErrorText';
 import { taskService } from '../services/taskService';
-import type { ChangeTaskStatusDto, CreateTaskDto, Task, TaskListFilters } from '../types';
+import type {
+  ChangeTaskStatusDto,
+  CreateTaskDto,
+  TaskListFilters,
+} from '../services/taskService.dto';
+import type { Task } from '../types';
 
 export interface FetchTasksForUserOptions extends TaskListFilters {
   /** Omit for the first page; pass the store's `nextCursor` to load the next one. */
