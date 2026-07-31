@@ -6,6 +6,9 @@ ENV VITE_REALTIME_URL=$VITE_REALTIME_URL
 WORKDIR /app
 COPY . .
 RUN npm ci
+# task-app imports @core/shared through its dist entry points, which are not
+# checked in — compile the library before bundling the app.
+RUN npm run build -w @core/shared
 RUN npm run build -w frontend-application/task-app
 
 FROM nginx:1.27-alpine AS runtime
