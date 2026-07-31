@@ -1,11 +1,10 @@
-import { BaseDao } from '@core/shared';
+import { BaseDao, type CursorPage } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, DeepPartial } from 'typeorm';
 
 import { READ_CONNECTION } from '../infrastructure/database/database.module';
 import { TaskStatusHistoryEntity } from './entities/task-status-history.entity';
-import { type CursorPage, decodeKeysetCursor, encodeKeysetCursor } from './task.dao';
 
 /**
  * One audit-trail row, read-only by nature — a history entry is written once
@@ -50,34 +49,14 @@ export class TaskStatusHistoryDao extends BaseDao<TaskStatusHistoryEntity, TaskS
     limit: number,
     cursor?: string,
   ): Promise<CursorPage<TaskStatusHistoryEntry>> {
-    const afterCursor = cursor === undefined ? null : decodeKeysetCursor(cursor);
-
-    const queryBuilder = this.readRepository
-      .createQueryBuilder('history')
-      .where('history.taskId = :taskId', { taskId })
-      .orderBy('history.createdAt', 'ASC')
-      .addOrderBy('history.id', 'ASC')
-      .take(limit + 1);
-
-    if (afterCursor) {
-      queryBuilder.andWhere('(history.createdAt, history.id) > (:cursorCreatedAt, :cursorId)', {
-        cursorCreatedAt: afterCursor.createdAt,
-        cursorId: afterCursor.id,
-      });
-    }
-
-    const rows = await queryBuilder.getMany();
-    const hasNextPage = rows.length > limit;
-    const pageRows = hasNextPage ? rows.slice(0, limit) : rows;
-    const lastRow = pageRows[pageRows.length - 1];
-
-    return {
-      items: this.toDomainModels(pageRows),
-      nextCursor:
-        hasNextPage && lastRow
-          ? encodeKeysetCursor({ createdAt: lastRow.createdAt, id: lastRow.id })
-          : null,
-    };
+    return this.findKeysetPage({
+      alias: 'history',
+      direction: 'ASC',
+      limit,
+      cursor,
+      applyFilter: (queryBuilder) => queryBuilder.where('history.taskId = :taskId', { taskId }),
+      keyOf: (history) => ({ createdAt: history.createdAt, id: history.id }),
+    });
   }
 
   protected toDomainModel(entity: TaskStatusHistoryEntity): TaskStatusHistoryEntry {

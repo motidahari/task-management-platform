@@ -1,4 +1,5 @@
 export * from './dao/base.dao';
+export * from './dao/keyset-cursor';
 export * from './error-codes';
 export * from './errors/app-exception';
 export * from './errors/error-response';
