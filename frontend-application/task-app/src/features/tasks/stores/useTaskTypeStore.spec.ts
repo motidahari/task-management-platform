@@ -1,4 +1,4 @@
-import { ErrorCode } from '@core/shared';
+import { ErrorCode } from '@core/shared/error-codes';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiError } from '../../../core/types/api-error';
