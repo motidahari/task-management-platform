@@ -11,6 +11,7 @@ import { AssigneeNotFoundException } from '../../../src/task/exception/assignee-
 import { InvalidStatusTransitionException } from '../../../src/task/exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from '../../../src/task/exception/missing-required-fields.exception';
 import { TaskClosedException } from '../../../src/task/exception/task-closed.exception';
+import { TaskNotAtFinalStatusException } from '../../../src/task/exception/task-not-at-final-status.exception';
 import { TaskNotFoundException } from '../../../src/task/exception/task-not-found.exception';
 import { TaskStateConflictException } from '../../../src/task/exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from '../../../src/task/exception/unknown-task-type.exception';
@@ -92,12 +93,14 @@ interface TaskDaoMock {
   getByIdForUpdate: jest.Mock;
   update: jest.Mock;
   getById: jest.Mock;
+  close: jest.Mock;
 }
 
 interface TaskStatusHistoryDaoMock {
   appendCreation: jest.Mock;
   append: jest.Mock;
   findPageByTask: jest.Mock;
+  appendClose: jest.Mock;
 }
 
 interface TaskServiceHarness {
@@ -129,6 +132,9 @@ function defaultTaskDaoMock(): TaskDaoMock {
           }),
       ),
     getById: jest.fn().mockResolvedValue(fakeTask()),
+    close: jest
+      .fn()
+      .mockImplementation((taskId: string) => fakeTask({ id: taskId, isClosed: true })),
   };
 }
 
@@ -137,6 +143,7 @@ function defaultTaskStatusHistoryDaoMock(): TaskStatusHistoryDaoMock {
     appendCreation: jest.fn().mockResolvedValue(undefined),
     append: jest.fn().mockResolvedValue(undefined),
     findPageByTask: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+    appendClose: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -745,6 +752,99 @@ describe('TaskService', () => {
 
       expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith('task-id', 5, undefined);
       expect(result.limit).toBe(5);
+    });
+  });
+
+  describe('Given:the task is already closed, When:closeTask is called', () => {
+    it('should reject with TaskClosedException and write nothing', async () => {
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ isClosed: true })),
+        },
+      });
+
+      await expect(service.closeTask('task-id')).rejects.toThrow(TaskClosedException);
+
+      expect(taskDao.close).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.appendClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Given:the task has not reached its type's final status, When:closeTask is called", () => {
+    it('should reject with TaskNotAtFinalStatusException and write nothing', async () => {
+      // Default harness registry resolves the final status to 3 — a task
+      // still at status 2 has not reached it.
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 2, isClosed: false })),
+        },
+      });
+
+      await expect(service.closeTask('task-id')).rejects.toThrow(TaskNotAtFinalStatusException);
+
+      expect(taskDao.close).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.appendClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:a task at its final status and not yet closed, When:closeTask is called', () => {
+    it('should return the closed task, leaving its assignee unchanged, and append a matching history row inside one transaction', async () => {
+      const closedTask = fakeTask({
+        id: 'task-id',
+        status: 3,
+        isClosed: true,
+        assignedUserId: ASSIGNEE_ID,
+      });
+      const { service, transactionMock, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          getByIdForUpdate: jest
+            .fn()
+            .mockResolvedValue(
+              fakeTask({ id: 'task-id', status: 3, isClosed: false, assignedUserId: ASSIGNEE_ID }),
+            ),
+          close: jest.fn().mockResolvedValue(closedTask),
+        },
+      });
+
+      const result = await service.closeTask('task-id');
+
+      expect(result).toBe(closedTask);
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+      expect(taskDao.close).toHaveBeenCalledWith('task-id', TRANSACTION_MANAGER);
+      // The history row records the assignee the task already had — closing
+      // is not a status change, so there is no "next" assignee to record.
+      expect(taskStatusHistoryDao.appendClose).toHaveBeenCalledWith(
+        closedTask,
+        TRANSACTION_MANAGER,
+      );
+    });
+  });
+
+  describe('Given:the history append fails after the task was closed, When:closeTask is called', () => {
+    it('should propagate the failure out of the transaction rather than returning a task', async () => {
+      const failure = new Error('constraint violation');
+      const closedTask = fakeTask({ id: 'task-id', status: 3, isClosed: true });
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          getByIdForUpdate: jest
+            .fn()
+            .mockResolvedValue(fakeTask({ id: 'task-id', status: 3, isClosed: false })),
+          close: jest.fn().mockResolvedValue(closedTask),
+        },
+        taskStatusHistoryDao: {
+          appendClose: jest.fn().mockRejectedValue(failure),
+        },
+      });
+
+      await expect(service.closeTask('task-id')).rejects.toThrow(failure);
+
+      // Both writes were attempted against the same transaction manager —
+      // the point of the explicit transaction is that a real one rolls both
+      // back together on this same unmodified rejection, leaving neither
+      // write committed, rather than the service catching it and leaving
+      // the task closed without its history entry.
+      expect(taskDao.close).toHaveBeenCalledTimes(1);
+      expect(taskStatusHistoryDao.appendClose).toHaveBeenCalledTimes(1);
     });
   });
 });

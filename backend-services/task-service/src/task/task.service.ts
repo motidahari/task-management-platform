@@ -18,6 +18,7 @@ import { AssigneeNotFoundException } from './exception/assignee-not-found.except
 import { InvalidStatusTransitionException } from './exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from './exception/missing-required-fields.exception';
 import { TaskClosedException } from './exception/task-closed.exception';
+import { TaskNotAtFinalStatusException } from './exception/task-not-at-final-status.exception';
 import { TaskStateConflictException } from './exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from './exception/unknown-task-type.exception';
 
@@ -151,6 +152,34 @@ export class TaskService {
     }
 
     return Math.min(limit, MAX_HISTORY_PAGE_LIMIT);
+  }
+
+  /**
+   * Closing is a terminal action, not a transition to a further status —
+   * the assignee and custom fields carry over untouched, and there is no
+   * "next" status for a client to name. A task can only close once, and
+   * only once it has reached its type's final status; either violation
+   * gets a distinct, deterministic rejection rather than the change-status
+   * exceptions, which describe a status move this isn't.
+   */
+  async closeTask(taskId: string): Promise<Task> {
+    return this.dataSource.transaction(async (manager) => {
+      const task = await this.taskDao.getByIdForUpdate(taskId, manager);
+
+      if (task.isClosed) {
+        throw new TaskClosedException();
+      }
+
+      if (task.status !== this.taskTypeRegistry.finalStatusOf(task.type)) {
+        throw new TaskNotAtFinalStatusException();
+      }
+
+      const closedTask = await this.taskDao.close(taskId, manager);
+
+      await this.taskStatusHistoryDao.appendClose(closedTask, manager);
+
+      return closedTask;
+    });
   }
 
   /**
