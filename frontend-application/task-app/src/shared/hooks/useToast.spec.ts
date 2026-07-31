@@ -1,59 +1,73 @@
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import { bus } from '../../core/bus/bus';
 import { useToast } from './useToast';
 
-describe('useToast, Given:success() called with a message key', () => {
-  it('should emit a toast:show event carrying the key and kind success', () => {
+interface ToastHarness {
+  toast: ReturnType<typeof useToast>;
+  handler: Mock;
+  unsubscribe: () => void;
+}
+
+describe('useToast', () => {
+  const renderUseToast = (): ToastHarness => {
     const { result } = renderHook(() => useToast());
     const handler = vi.fn();
     const unsubscribe = bus.on('toast:show', handler);
 
-    result.current.success('some.key', { count: 1 });
-    unsubscribe();
+    return { toast: result.current, handler, unsubscribe };
+  };
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({
-      kind: 'success',
-      messageKey: 'some.key',
-      params: { count: 1 },
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('Given:success() called with a message key', () => {
+    it('should emit a toast:show event carrying the key and kind success', () => {
+      const { toast, handler, unsubscribe } = renderUseToast();
+
+      toast.success('some.key', { count: 1 });
+      unsubscribe();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({
+        kind: 'success',
+        messageKey: 'some.key',
+        params: { count: 1 },
+      });
     });
   });
-});
 
-describe('useToast, Given:error() called with a message key', () => {
-  it('should emit a toast:show event carrying the key and kind error', () => {
-    const { result } = renderHook(() => useToast());
-    const handler = vi.fn();
-    const unsubscribe = bus.on('toast:show', handler);
+  describe('Given:error() called with a message key', () => {
+    it('should emit a toast:show event carrying the key and kind error', () => {
+      const { toast, handler, unsubscribe } = renderUseToast();
 
-    result.current.error('some.error-key');
-    unsubscribe();
+      toast.error('some.error-key');
+      unsubscribe();
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({
-      kind: 'error',
-      messageKey: 'some.error-key',
-      params: undefined,
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({
+        kind: 'error',
+        messageKey: 'some.error-key',
+        params: undefined,
+      });
     });
   });
-});
 
-describe('useToast, Given:info() called with a message key', () => {
-  it('should emit a toast:show event carrying the key and kind info', () => {
-    const { result } = renderHook(() => useToast());
-    const handler = vi.fn();
-    const unsubscribe = bus.on('toast:show', handler);
+  describe('Given:info() called with a message key', () => {
+    it('should emit a toast:show event carrying the key and kind info', () => {
+      const { toast, handler, unsubscribe } = renderUseToast();
 
-    result.current.info('some.info-key');
-    unsubscribe();
+      toast.info('some.info-key');
+      unsubscribe();
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({
-      kind: 'info',
-      messageKey: 'some.info-key',
-      params: undefined,
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({
+        kind: 'info',
+        messageKey: 'some.info-key',
+        params: undefined,
+      });
     });
   });
 });

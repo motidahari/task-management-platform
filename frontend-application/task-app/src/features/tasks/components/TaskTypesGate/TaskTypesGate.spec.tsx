@@ -13,104 +13,85 @@ vi.mock('../../stores/useTaskTypeStore', () => ({
   useTaskTypeStore: vi.fn(),
 }));
 
-const mockedUseTaskTypeStore = vi.mocked(useTaskTypeStore);
+describe('TaskTypesGate', () => {
+  const mockedUseTaskTypeStore = vi.mocked(useTaskTypeStore);
 
-function mockStoreState(
-  overrides: Partial<TaskTypeStoreState> & { status: TaskTypeStoreState['status'] },
-): ReturnType<typeof vi.fn> {
-  const loadTaskTypes = vi.fn();
-  const state: TaskTypeStoreState = {
-    definitions: [],
-    error: null,
-    loadTaskTypes,
-    ...overrides,
-  };
+  function mockStoreState(
+    overrides: Partial<TaskTypeStoreState> & { status: TaskTypeStoreState['status'] },
+  ): ReturnType<typeof vi.fn> {
+    const loadTaskTypes = vi.fn();
+    const state: TaskTypeStoreState = {
+      definitions: [],
+      error: null,
+      loadTaskTypes,
+      ...overrides,
+    };
 
-  mockedUseTaskTypeStore.mockImplementation((selector: (state: TaskTypeStoreState) => unknown) =>
-    selector(state),
-  );
+    mockedUseTaskTypeStore.mockImplementation((selector: (state: TaskTypeStoreState) => unknown) =>
+      selector(state),
+    );
 
-  return loadTaskTypes;
-}
+    return loadTaskTypes;
+  }
 
-describe('TaskTypesGate, Given:the task-type metadata is idle on mount', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('should trigger the initial load and render the loading placeholder', () => {
-    const loadTaskTypes = mockStoreState({ status: 'idle' });
-
+  const renderGate = (): ReturnType<typeof render> =>
     render(
       <TaskTypesGate>
         <div>protected content</div>
       </TaskTypesGate>,
     );
 
-    expect(loadTaskTypes).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.queryByText('protected content')).not.toBeInTheDocument();
-  });
-});
-
-describe('TaskTypesGate, Given:the task-type metadata is loading', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should render the loading placeholder without triggering another load', () => {
-    const loadTaskTypes = mockStoreState({ status: 'loading' });
+  describe('Given:the task-type metadata is idle on mount', () => {
+    it('should trigger the initial load and render the loading placeholder', () => {
+      const loadTaskTypes = mockStoreState({ status: 'idle' });
 
-    render(
-      <TaskTypesGate>
-        <div>protected content</div>
-      </TaskTypesGate>,
-    );
+      renderGate();
 
-    expect(loadTaskTypes).not.toHaveBeenCalled();
-    expect(screen.getByRole('status')).toBeInTheDocument();
-  });
-});
-
-describe('TaskTypesGate, Given:every automatic attempt to load the task-type metadata failed', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+      expect(loadTaskTypes).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.queryByText('protected content')).not.toBeInTheDocument();
+    });
   });
 
-  it('should render a full-screen retry state and re-trigger the load on click', () => {
-    const loadTaskTypes = mockStoreState({ status: 'error' });
+  describe('Given:the task-type metadata is loading', () => {
+    it('should render the loading placeholder without triggering another load', () => {
+      const loadTaskTypes = mockStoreState({ status: 'loading' });
 
-    render(
-      <TaskTypesGate>
-        <div>protected content</div>
-      </TaskTypesGate>,
-    );
+      renderGate();
 
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByText('protected content')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button'));
-
-    expect(loadTaskTypes).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('TaskTypesGate, Given:the task-type metadata resolved', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+      expect(loadTaskTypes).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
   });
 
-  it('should render the children instead of the spinner or the retry state', () => {
-    mockStoreState({ status: 'ready' });
+  describe('Given:every automatic attempt to load the task-type metadata failed', () => {
+    it('should render a full-screen retry state and re-trigger the load on click', () => {
+      const loadTaskTypes = mockStoreState({ status: 'error' });
 
-    render(
-      <TaskTypesGate>
-        <div>protected content</div>
-      </TaskTypesGate>,
-    );
+      renderGate();
 
-    expect(screen.getByText('protected content')).toBeInTheDocument();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.queryByText('protected content')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(loadTaskTypes).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Given:the task-type metadata resolved', () => {
+    it('should render the children instead of the spinner or the retry state', () => {
+      mockStoreState({ status: 'ready' });
+
+      renderGate();
+
+      expect(screen.getByText('protected content')).toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 });
