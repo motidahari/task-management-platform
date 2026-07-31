@@ -48,13 +48,19 @@ class UserDao extends BaseDao<UserRow, User> {
   inTransaction(manager: EntityManager): Repository<UserRow> {
     return this.repositoryFor(manager);
   }
+
+  insert(partial: DeepPartial<UserRow>, manager: EntityManager): Promise<User> {
+    return this.insertOne(partial, manager);
+  }
 }
 
 describe('BaseDao', () => {
   const writeRepository = { name: 'write-repository' };
   const readRepository = { name: 'read-repository' };
-  const transactionRepository = { name: 'transaction-repository' };
 
+  let create: jest.Mock;
+  let save: jest.Mock;
+  let transactionRepository: { name: string; create: jest.Mock; save: jest.Mock };
   let getWriteRepository: jest.Mock;
   let getReadRepository: jest.Mock;
   let getTransactionRepository: jest.Mock;
@@ -62,6 +68,9 @@ describe('BaseDao', () => {
   let dao: UserDao;
 
   beforeEach(() => {
+    create = jest.fn((partial: DeepPartial<UserRow>) => partial);
+    save = jest.fn((entity: UserRow) => Promise.resolve(entity));
+    transactionRepository = { name: 'transaction-repository', create, save };
     getWriteRepository = jest.fn().mockReturnValue(writeRepository);
     getReadRepository = jest.fn().mockReturnValue(readRepository);
     getTransactionRepository = jest.fn().mockReturnValue(transactionRepository);
@@ -118,6 +127,28 @@ describe('BaseDao', () => {
       expect(dao.inTransaction(transactionManager)).toBe(transactionRepository);
       expect(getTransactionRepository).toHaveBeenCalledWith(TABLE);
       expect(getWriteRepository).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:a partial row to insert, When:inserting inside an ongoing transaction', () => {
+    it('should create then save through the transaction-bound repository', async () => {
+      await dao.insert({ id: 'u-1', name: 'Alice' }, transactionManager);
+
+      expect(create).toHaveBeenCalledWith({ id: 'u-1', name: 'Alice' });
+      expect(save).toHaveBeenCalledWith({ id: 'u-1', name: 'Alice' });
+    });
+
+    it('should return the saved row mapped to its domain model', async () => {
+      const model = await dao.insert({ id: 'u-1', name: 'Alice' }, transactionManager);
+
+      expect(model).toEqual(new User('u-1', 'Alice'));
+    });
+
+    it('should not open a fresh repository outside the given transaction', async () => {
+      await dao.insert({ id: 'u-1', name: 'Alice' }, transactionManager);
+
+      expect(getWriteRepository).not.toHaveBeenCalled();
+      expect(getReadRepository).not.toHaveBeenCalled();
     });
   });
 });
