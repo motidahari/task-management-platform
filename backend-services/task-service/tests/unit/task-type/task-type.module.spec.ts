@@ -1,4 +1,6 @@
-import { Test } from '@nestjs/testing';
+import { Global, Module } from '@nestjs/common';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { getDataSourceToken } from '@nestjs/typeorm';
 
 import { TASK_TYPE_DEFINITION_CLASSES } from '../../../src/task-type/definitions';
 import { DevelopmentDefinition } from '../../../src/task-type/definitions/development.definition';
@@ -8,6 +10,29 @@ import {
   type TaskTypeDefinition,
 } from '../../../src/task-type/interfaces/task-type-definition.interface';
 import { TaskTypeModule } from '../../../src/task-type/task-type.module';
+
+/**
+ * Stands in for the real `DatabaseModule`. `TaskTypeModule` never imports it
+ * directly — the real app resolves `DataSource` through its global
+ * `TypeOrmCoreModule` registration, so this fake is marked `@Global()` too,
+ * the same way `HealthService` resolves it without `HealthModule` importing
+ * the database module.
+ */
+@Global()
+@Module({
+  providers: [{ provide: getDataSourceToken(), useValue: { query: jest.fn() } }],
+  exports: [getDataSourceToken()],
+})
+class FakeDatabaseModule {}
+
+/**
+ * `TaskTypeRegistry` (also provided by `TaskTypeModule`) injects the app's
+ * `DataSource` — stubbing it here keeps these tests focused on the
+ * registration array rather than on database wiring.
+ */
+function compileTaskTypeModule(): Promise<TestingModule> {
+  return Test.createTestingModule({ imports: [FakeDatabaseModule, TaskTypeModule] }).compile();
+}
 
 describe('TASK_TYPE_DEFINITION_CLASSES', () => {
   describe('Given:the registration array, When:reading its members', () => {
@@ -19,7 +44,7 @@ describe('TASK_TYPE_DEFINITION_CLASSES', () => {
 
   describe('Given:the registration array, When:resolved through TaskTypeModule', () => {
     it('should register every class in the array as its own provider', async () => {
-      const moduleRef = await Test.createTestingModule({ imports: [TaskTypeModule] }).compile();
+      const moduleRef = await compileTaskTypeModule();
 
       const instances = TASK_TYPE_DEFINITION_CLASSES.map((definitionClass) =>
         moduleRef.get(definitionClass),
@@ -32,7 +57,7 @@ describe('TASK_TYPE_DEFINITION_CLASSES', () => {
     });
 
     it('should inject exactly those provider instances into ALL_TASK_TYPE_DEFINITIONS, in array order', async () => {
-      const moduleRef = await Test.createTestingModule({ imports: [TaskTypeModule] }).compile();
+      const moduleRef = await compileTaskTypeModule();
 
       const providerInstances = TASK_TYPE_DEFINITION_CLASSES.map((definitionClass) =>
         moduleRef.get(definitionClass),
@@ -44,7 +69,7 @@ describe('TASK_TYPE_DEFINITION_CLASSES', () => {
     });
 
     it('should keep the array as the single source: every entry is both a provider and an injected instance', async () => {
-      const moduleRef = await Test.createTestingModule({ imports: [TaskTypeModule] }).compile();
+      const moduleRef = await compileTaskTypeModule();
 
       const aggregated = moduleRef.get<TaskTypeDefinition[]>(ALL_TASK_TYPE_DEFINITIONS);
 
