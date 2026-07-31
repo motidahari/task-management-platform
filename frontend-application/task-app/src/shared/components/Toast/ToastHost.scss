@@ -1,0 +1,10 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.toast-host {
+  @include mixins.flx($direction: column, $align: flex-end, $gap: vars.$spacing-sm);
+  position: fixed;
+  top: vars.$spacing-lg;
+  right: vars.$spacing-lg;
+  z-index: 1000;
+}
