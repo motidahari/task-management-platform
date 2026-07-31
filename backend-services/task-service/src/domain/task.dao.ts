@@ -34,16 +34,13 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
    * this service: the caller never null-checks the result.
    */
   async getByIdForUpdate(taskId: string, manager: EntityManager): Promise<Task> {
-    const entity = await this.repositoryFor(manager).findOne({
-      where: { id: taskId },
-      lock: { mode: 'pessimistic_write' },
-    });
-
-    if (!entity) {
-      throw new TaskNotFoundException(taskId);
-    }
-
-    return this.toDomainModel(entity);
+    return this.findOneOrThrow(
+      { id: taskId },
+      () => {
+        throw new TaskNotFoundException(taskId);
+      },
+      { manager, lock: { mode: 'pessimistic_write' } },
+    );
   }
 
   /**
@@ -57,13 +54,9 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
    * this service: the caller never null-checks the result.
    */
   async getById(taskId: string): Promise<Task> {
-    const entity = await this.readRepository.findOne({ where: { id: taskId } });
-
-    if (!entity) {
+    return this.findOneOrThrow({ id: taskId }, () => {
       throw new TaskNotFoundException(taskId);
-    }
-
-    return this.toDomainModel(entity);
+    });
   }
 
   /**

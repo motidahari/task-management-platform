@@ -7,6 +7,7 @@ import { Task } from '../../../src/domain/task.model';
 import type { StatusDefinition } from '../../../src/task-type/interfaces/task-type-definition.interface';
 import { TaskTypeRegistry } from '../../../src/task-type/task-type.registry';
 import type { ChangeStatusDto } from '../../../src/task/dto/change-status.dto';
+import type { HistoryEntryDto } from '../../../src/task/dto/history-page.dto';
 import { AssigneeNotFoundException } from '../../../src/task/exception/assignee-not-found.exception';
 import { InvalidStatusTransitionException } from '../../../src/task/exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from '../../../src/task/exception/missing-required-fields.exception';
@@ -698,7 +699,7 @@ describe('TaskService', () => {
   });
 
   describe('Given:an existing task with a multi-row history, When:getHistoryPage is called', () => {
-    it("should return the DAO's oldest-first page and nextCursor unchanged", async () => {
+    it('should project the DAO page to the wire shape oldest-first, nextCursor unchanged', async () => {
       const creation = fakeHistoryEntry({ id: 'entry-1', fromStatus: null, toStatus: 1 });
       const advance = fakeHistoryEntry({ id: 'entry-2', fromStatus: 1, toStatus: 2 });
       const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
@@ -711,13 +712,23 @@ describe('TaskService', () => {
 
       const result = await service.getHistoryPage('task-id', { cursor: 'incoming-cursor' });
 
+      // The wire entry drops the row's own `id` and `taskId` — a client pages
+      // by the opaque cursor and already knows which task it asked about.
+      const toWireEntry = (entry: TaskStatusHistoryEntry): HistoryEntryDto => ({
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        assignedUserId: entry.assignedUserId,
+        fieldsSnapshot: entry.fieldsSnapshot,
+        createdAt: entry.createdAt,
+      });
+
       expect(taskDao.getById).toHaveBeenCalledWith('task-id');
       expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith(
         'task-id',
         20,
         'incoming-cursor',
       );
-      expect(result.items).toEqual([creation, advance]);
+      expect(result.items).toEqual([toWireEntry(creation), toWireEntry(advance)]);
       expect(result.nextCursor).toBe('opaque-cursor');
     });
   });

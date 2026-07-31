@@ -6,31 +6,19 @@ import { TaskService } from './task.service';
 
 /**
  * Read-only transport slice for a task's status-transition timeline — the
- * audit trail every status change writes. The existence gate and the paging
- * itself both live in `TaskService`; this handler only validates the
- * request in and reshapes the domain page into the wire response out.
+ * audit trail every status change writes. Validates the request in and hands
+ * the wire response straight back from `TaskService`, which owns the existence
+ * gate, the paging, and the response shape.
  */
 @Controller('tasks')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Get(':id/history')
-  async getHistory(
+  getHistory(
     @Param('id', new ParseUUIDPipe()) taskId: string,
     @Query() query: HistoryPageQueryDto,
   ): Promise<HistoryPageDto> {
-    const page = await this.taskService.getHistoryPage(taskId, query);
-
-    return {
-      items: page.items.map((entry) => ({
-        fromStatus: entry.fromStatus,
-        toStatus: entry.toStatus,
-        assignedUserId: entry.assignedUserId,
-        fieldsSnapshot: entry.fieldsSnapshot,
-        createdAt: entry.createdAt,
-      })),
-      nextCursor: page.nextCursor,
-      limit: page.limit,
-    };
+    return this.taskService.getHistoryPage(taskId, query);
   }
 }
