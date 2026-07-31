@@ -7,6 +7,7 @@ export * from './errors/error-response';
 export * from './errors/validation.exception';
 export * from './filters/http-exception.filter';
 export * from './http/conditional-get';
+export * from './http/conditional-get.interceptor';
 export * from './logging/logger';
 export * from './sanitizers/sanitize-enum-key';
 export * from './sanitizers/sanitize-string';
