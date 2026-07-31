@@ -4,6 +4,16 @@
     "error-message": "We couldn't load task types. Please try again.",
     "retry-button": "Retry"
   },
+  "dynamic-fields-form": {
+    "required-error": "This field is required.",
+    "format-error": "This value doesn't match the expected format.",
+    "range-error": "Enter a value between {{min}} and {{max}}.",
+    "min-error": "Enter a value of at least {{min}}.",
+    "max-error": "Enter a value of at most {{max}}."
+  },
+  "status-stepper": {
+    "aria-label": "Status"
+  },
   "app-layout": {
     "title": "Task Management Platform"
   },
