@@ -3,6 +3,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
+  // @core/shared ships CommonJS; pre-bundle it so its named exports resolve
+  // through esbuild's interop instead of being served as raw CJS.
+  optimizeDeps: { include: ['@core/shared'] },
+  build: { commonjsOptions: { include: [/@core\/shared/, /node_modules/] } },
   test: {
     globals: true,
     environment: 'jsdom',
