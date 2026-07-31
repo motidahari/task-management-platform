@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import { ModalHost } from '../shared/components/Modal';
 import { ThemeToggle } from '../shared/components/ThemeToggle';
