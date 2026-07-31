@@ -11,6 +11,7 @@ export interface AppConfig {
   readonly redisUrl: string;
   readonly corsOrigins: readonly string[];
   readonly throttle: ThrottleConfig;
+  readonly realtime: RealtimeConfig;
 }
 
 export interface DatabaseConfig {
@@ -25,6 +26,11 @@ export interface DatabaseConfig {
 export interface ThrottleConfig {
   readonly ttlSec: number;
   readonly limit: number;
+}
+
+export interface RealtimeConfig {
+  /** Hard cap on concurrently connected sockets on the realtime namespace, past which new connections are rejected. */
+  readonly maxConnections: number;
 }
 
 const WILDCARD_ORIGIN = '*';
@@ -64,6 +70,7 @@ const EnvSchema = z.object({
   CORS_ORIGINS: corsOriginList,
   THROTTLE_TTL_SEC: z.coerce.number().int().positive().default(60),
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
+  REALTIME_MAX_CONNECTIONS: z.coerce.number().int().positive().default(1000),
 });
 
 /**
@@ -108,6 +115,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throttle: {
       ttlSec: parsed.THROTTLE_TTL_SEC,
       limit: parsed.THROTTLE_LIMIT,
+    },
+    realtime: {
+      maxConnections: parsed.REALTIME_MAX_CONNECTIONS,
     },
   };
 }
