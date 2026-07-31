@@ -78,6 +78,35 @@ export class TaskWriteDao extends TaskDao {
 
     return this.toDomainModel(toTaskEntity(rawRow));
   }
+
+  /**
+   * Flips `is_closed` alone, leaving status, assignee and custom fields
+   * exactly as they were — closing is not a status change. `RETURNING *`
+   * mirrors `update`, for the same reason: no follow-up `SELECT` that could
+   * observe a different snapshot than the write it is meant to confirm.
+   * Must run inside the caller's transaction `manager` so it commits
+   * atomically with the history row the service appends alongside it.
+   */
+  async close(taskId: string, manager: EntityManager): Promise<Task> {
+    const updateResult = await this.repositoryFor(manager)
+      .createQueryBuilder()
+      .update(TaskEntity)
+      .set({ isClosed: true })
+      .where('id = :taskId', { taskId })
+      .returning('*')
+      .execute();
+
+    const [rawRow] = updateResult.raw as RawUpdatedTaskRow[];
+
+    if (!rawRow) {
+      // Same reasoning as `update`: the caller already holds this row's
+      // write lock, so a zero-row match here is a registry inconsistency,
+      // not a client-facing outcome.
+      throw new Error(`Close of task ${taskId} returned no row.`);
+    }
+
+    return this.toDomainModel(toTaskEntity(rawRow));
+  }
 }
 
 /**
