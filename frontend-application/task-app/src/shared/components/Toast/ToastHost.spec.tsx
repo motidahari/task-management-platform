@@ -11,8 +11,9 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-describe('ToastHost, Given:a toast:show event carrying a messageKey', () => {
+describe('ToastHost', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.useFakeTimers();
   });
 
@@ -20,80 +21,58 @@ describe('ToastHost, Given:a toast:show event carrying a messageKey', () => {
     vi.useRealTimers();
   });
 
-  it('should resolve and render the translated copy', () => {
-    render(<ToastHost />);
+  describe('Given:a toast:show event carrying a messageKey', () => {
+    it('should resolve and render the translated copy', () => {
+      render(<ToastHost />);
 
-    act(() => {
-      bus.emit('toast:show', { kind: 'success', messageKey: 'tasks.toast.closed' });
+      act(() => {
+        bus.emit('toast:show', { kind: 'success', messageKey: 'tasks.toast.closed' });
+      });
+
+      expect(screen.getByText('tasks.toast.closed')).toBeInTheDocument();
     });
-
-    expect(screen.getByText('tasks.toast.closed')).toBeInTheDocument();
-  });
-});
-
-describe('ToastHost, Given:a toast:show event carrying pre-resolved text', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  describe('Given:a toast:show event carrying pre-resolved text', () => {
+    it('should render the text as-is without translating it', () => {
+      render(<ToastHost />);
 
-  it('should render the text as-is without translating it', () => {
-    render(<ToastHost />);
+      act(() => {
+        bus.emit('toast:show', { kind: 'error', text: 'Something went wrong' });
+      });
 
-    act(() => {
-      bus.emit('toast:show', { kind: 'error', text: 'Something went wrong' });
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     });
-
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-  });
-});
-
-describe('ToastHost, Given:a toast that has been showing past the auto-dismiss delay', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  describe('Given:a toast that has been showing past the auto-dismiss delay', () => {
+    it('should remove it on its own', () => {
+      render(<ToastHost />);
 
-  it('should remove it on its own', () => {
-    render(<ToastHost />);
+      act(() => {
+        bus.emit('toast:show', { kind: 'info', text: 'Heads up' });
+      });
+      expect(screen.getByText('Heads up')).toBeInTheDocument();
 
-    act(() => {
-      bus.emit('toast:show', { kind: 'info', text: 'Heads up' });
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(screen.queryByText('Heads up')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('Heads up')).toBeInTheDocument();
+  });
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
+  describe('Given:the dismiss button is clicked before the auto-dismiss delay', () => {
+    it('should remove the toast immediately', () => {
+      render(<ToastHost />);
+
+      act(() => {
+        bus.emit('toast:show', { kind: 'info', text: 'Heads up' });
+      });
+
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(screen.queryByText('Heads up')).not.toBeInTheDocument();
     });
-
-    expect(screen.queryByText('Heads up')).not.toBeInTheDocument();
-  });
-});
-
-describe('ToastHost, Given:the dismiss button is clicked before the auto-dismiss delay', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('should remove the toast immediately', () => {
-    render(<ToastHost />);
-
-    act(() => {
-      bus.emit('toast:show', { kind: 'info', text: 'Heads up' });
-    });
-
-    fireEvent.click(screen.getByRole('button'));
-
-    expect(screen.queryByText('Heads up')).not.toBeInTheDocument();
   });
 });
