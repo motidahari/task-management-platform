@@ -1,0 +1,39 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.select {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-xs);
+  width: 100%;
+
+  &__label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
+  &__input {
+    min-height: 44px;
+    padding: vars.$spacing-sm;
+    border: 1px solid var(--color-border);
+    border-radius: vars.$radius-sm;
+    background-color: var(--color-bg-card);
+    color: var(--color-text);
+    font-size: 1rem;
+    transition: border-color vars.$transition-fast;
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+
+    &--error {
+      border-color: var(--color-danger);
+    }
+  }
+
+  &__error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-danger);
+  }
+}

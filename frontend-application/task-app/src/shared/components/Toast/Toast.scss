@@ -1,0 +1,42 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.toast {
+  @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
+  min-width: 240px;
+  max-width: 400px;
+  padding: vars.$spacing-sm vars.$spacing-md;
+  border-radius: vars.$radius-sm;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+
+  &--success {
+    border-color: var(--color-primary);
+  }
+
+  &--error {
+    border-color: var(--color-danger);
+  }
+
+  &--info {
+    border-color: var(--color-border);
+  }
+
+  &__message {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  &__dismiss {
+    min-width: 32px;
+    min-height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+}

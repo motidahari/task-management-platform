@@ -1,0 +1,50 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.button {
+  @include mixins.flx($justify: center, $align: center, $gap: vars.$spacing-sm);
+  min-height: 44px;
+  padding: vars.$spacing-sm vars.$spacing-lg;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color vars.$transition-fast,
+    border-color vars.$transition-fast,
+    opacity vars.$transition-fast;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  &--primary {
+    background-color: var(--color-primary);
+    color: var(--color-bg);
+
+    &:hover:not(:disabled) {
+      background-color: var(--color-primary-hover);
+    }
+  }
+
+  &--secondary {
+    background-color: transparent;
+    border-color: var(--color-border);
+    color: var(--color-text);
+
+    &:hover:not(:disabled) {
+      background-color: var(--color-bg-elevated);
+    }
+  }
+
+  &--danger {
+    background-color: var(--color-danger);
+    color: var(--color-bg);
+
+    &:hover:not(:disabled) {
+      opacity: 0.85;
+    }
+  }
+}
