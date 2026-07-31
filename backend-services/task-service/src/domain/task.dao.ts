@@ -47,6 +47,26 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
   }
 
   /**
+   * Reads one task with no lock — the existence gate for a request that only
+   * needs to confirm the row is there before doing something else (e.g.
+   * paging its history), never mutate it. Unlike `getByIdForUpdate`, safe to
+   * call outside a transaction, and reads from the replica-capable
+   * connection since nothing here depends on seeing the latest write.
+   *
+   * Throws when the row is absent, matching every other `getBy*` accessor in
+   * this service: the caller never null-checks the result.
+   */
+  async getById(taskId: string): Promise<Task> {
+    const entity = await this.readRepository.findOne({ where: { id: taskId } });
+
+    if (!entity) {
+      throw new TaskNotFoundException(taskId);
+    }
+
+    return this.toDomainModel(entity);
+  }
+
+  /**
    * Newest-first keyset page of one assignee's tasks. Ordering, index and
    * predicate all agree on `(created_at DESC, id DESC)` — `id` breaks ties
    * between rows sharing one `created_at`, which two transitions landing in

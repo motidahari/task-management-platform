@@ -1,5 +1,6 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
+import type { TaskStatusHistoryEntry } from '../../../src/domain/task-status-history.dao';
 import { TaskStatusHistoryWriteDao } from '../../../src/task/dao/task-status-history-write.dao';
 import { TaskWriteDao } from '../../../src/task/dao/task-write.dao';
 import { Task } from '../../../src/domain/task.model';
@@ -62,6 +63,18 @@ function changeStatusDto(overrides: Partial<ChangeStatusDto> = {}): ChangeStatus
   };
 }
 
+function fakeHistoryEntry(overrides: Partial<TaskStatusHistoryEntry> = {}): TaskStatusHistoryEntry {
+  return {
+    id: overrides.id ?? 'history-id',
+    taskId: overrides.taskId ?? 'task-id',
+    fromStatus: overrides.fromStatus ?? null,
+    toStatus: overrides.toStatus ?? 1,
+    assignedUserId: overrides.assignedUserId ?? ASSIGNEE_ID,
+    fieldsSnapshot: overrides.fieldsSnapshot ?? {},
+    createdAt: overrides.createdAt ?? new Date('2026-01-01T00:00:00.000Z'),
+  };
+}
+
 /**
  * Mirrors `DataSource.transaction`'s real contract closely enough for a unit
  * test: it runs the callback against a fixed manager and, crucially, does
@@ -74,30 +87,31 @@ function fakeDataSource(transactionMock: jest.Mock): DataSource {
   return { transaction: transactionMock } as unknown as DataSource;
 }
 
+interface TaskDaoMock {
+  create: jest.Mock;
+  getByIdForUpdate: jest.Mock;
+  update: jest.Mock;
+  getById: jest.Mock;
+}
+
+interface TaskStatusHistoryDaoMock {
+  appendCreation: jest.Mock;
+  append: jest.Mock;
+  findPageByTask: jest.Mock;
+}
+
 interface TaskServiceHarness {
   service: TaskService;
   transactionMock: jest.Mock;
-  taskDao: { create: jest.Mock; getByIdForUpdate: jest.Mock; update: jest.Mock };
-  taskStatusHistoryDao: { appendCreation: jest.Mock; append: jest.Mock };
+  taskDao: TaskDaoMock;
+  taskStatusHistoryDao: TaskStatusHistoryDaoMock;
   assigneeExistenceDao: { existsById: jest.Mock };
   taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
   fieldValidator: { validate: jest.Mock };
 }
 
-function taskServiceHarness(
-  overrides: Partial<{
-    taskDao: { create: jest.Mock; getByIdForUpdate: jest.Mock; update: jest.Mock };
-    taskStatusHistoryDao: { appendCreation: jest.Mock; append: jest.Mock };
-    assigneeExistenceDao: { existsById: jest.Mock };
-    taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
-    fieldValidator: { validate: jest.Mock };
-  }> = {},
-): TaskServiceHarness {
-  const transactionMock = jest.fn(
-    (runInTransaction: (manager: EntityManager) => Promise<unknown>) =>
-      runInTransaction(TRANSACTION_MANAGER),
-  );
-  const taskDao = overrides.taskDao ?? {
+function defaultTaskDaoMock(): TaskDaoMock {
+  return {
     create: jest.fn().mockResolvedValue(fakeTask()),
     getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask()),
     update: jest
@@ -114,10 +128,38 @@ function taskServiceHarness(
             customFields: params.customFields,
           }),
       ),
+    getById: jest.fn().mockResolvedValue(fakeTask()),
   };
-  const taskStatusHistoryDao = overrides.taskStatusHistoryDao ?? {
+}
+
+function defaultTaskStatusHistoryDaoMock(): TaskStatusHistoryDaoMock {
+  return {
     appendCreation: jest.fn().mockResolvedValue(undefined),
     append: jest.fn().mockResolvedValue(undefined),
+    findPageByTask: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+  };
+}
+
+function taskServiceHarness(
+  overrides: Partial<{
+    taskDao: Partial<TaskDaoMock>;
+    taskStatusHistoryDao: Partial<TaskStatusHistoryDaoMock>;
+    assigneeExistenceDao: { existsById: jest.Mock };
+    taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
+    fieldValidator: { validate: jest.Mock };
+  }> = {},
+): TaskServiceHarness {
+  const transactionMock = jest.fn(
+    (runInTransaction: (manager: EntityManager) => Promise<unknown>) =>
+      runInTransaction(TRANSACTION_MANAGER),
+  );
+  // A caller overriding only the methods its own test exercises (e.g. just
+  // `getByIdForUpdate`) still gets every other method as a harmless default
+  // mock, rather than having to restate the whole DAO shape at every call site.
+  const taskDao: TaskDaoMock = { ...defaultTaskDaoMock(), ...overrides.taskDao };
+  const taskStatusHistoryDao: TaskStatusHistoryDaoMock = {
+    ...defaultTaskStatusHistoryDaoMock(),
+    ...overrides.taskStatusHistoryDao,
   };
   const assigneeExistenceDao = overrides.assigneeExistenceDao ?? {
     existsById: jest.fn().mockResolvedValue(true),
@@ -628,6 +670,81 @@ describe('TaskService', () => {
         },
         TRANSACTION_MANAGER,
       );
+    });
+  });
+
+  describe('Given:no task exists for the id, When:getHistoryPage is called', () => {
+    it('should reject with TaskNotFoundException without paging its history', async () => {
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          getById: jest.fn().mockRejectedValue(new TaskNotFoundException('missing-task')),
+        },
+      });
+
+      await expect(service.getHistoryPage('missing-task', {})).rejects.toThrow(
+        TaskNotFoundException,
+      );
+
+      expect(taskDao.getById).toHaveBeenCalledWith('missing-task');
+      expect(taskStatusHistoryDao.findPageByTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:an existing task with a multi-row history, When:getHistoryPage is called', () => {
+    it("should return the DAO's oldest-first page and nextCursor unchanged", async () => {
+      const creation = fakeHistoryEntry({ id: 'entry-1', fromStatus: null, toStatus: 1 });
+      const advance = fakeHistoryEntry({ id: 'entry-2', fromStatus: 1, toStatus: 2 });
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskStatusHistoryDao: {
+          findPageByTask: jest
+            .fn()
+            .mockResolvedValue({ items: [creation, advance], nextCursor: 'opaque-cursor' }),
+        },
+      });
+
+      const result = await service.getHistoryPage('task-id', { cursor: 'incoming-cursor' });
+
+      expect(taskDao.getById).toHaveBeenCalledWith('task-id');
+      expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith(
+        'task-id',
+        20,
+        'incoming-cursor',
+      );
+      expect(result.items).toEqual([creation, advance]);
+      expect(result.nextCursor).toBe('opaque-cursor');
+    });
+  });
+
+  describe('Given:no limit is requested, When:getHistoryPage is called', () => {
+    it('should default the page size to 20', async () => {
+      const { service, taskStatusHistoryDao } = taskServiceHarness();
+
+      const result = await service.getHistoryPage('task-id', {});
+
+      expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith('task-id', 20, undefined);
+      expect(result.limit).toBe(20);
+    });
+  });
+
+  describe('Given:a requested limit above the maximum, When:getHistoryPage is called', () => {
+    it('should clamp the page size to 100 rather than rejecting the request', async () => {
+      const { service, taskStatusHistoryDao } = taskServiceHarness();
+
+      const result = await service.getHistoryPage('task-id', { limit: 500 });
+
+      expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith('task-id', 100, undefined);
+      expect(result.limit).toBe(100);
+    });
+  });
+
+  describe('Given:a requested limit within range, When:getHistoryPage is called', () => {
+    it('should pass it through unchanged', async () => {
+      const { service, taskStatusHistoryDao } = taskServiceHarness();
+
+      const result = await service.getHistoryPage('task-id', { limit: 5 });
+
+      expect(taskStatusHistoryDao.findPageByTask).toHaveBeenCalledWith('task-id', 5, undefined);
+      expect(result.limit).toBe(5);
     });
   });
 });

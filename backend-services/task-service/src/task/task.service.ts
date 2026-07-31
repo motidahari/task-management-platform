@@ -1,7 +1,9 @@
+import type { CursorPage } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
+import type { TaskStatusHistoryEntry } from '../domain/task-status-history.dao';
 import { Task } from '../domain/task.model';
 import { FieldValidatorService } from '../task-type/field-validator.service';
 import type { StatusDefinition } from '../task-type/interfaces/task-type-definition.interface';
@@ -11,12 +13,23 @@ import { TaskStatusHistoryWriteDao } from './dao/task-status-history-write.dao';
 import { TaskWriteDao } from './dao/task-write.dao';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { HistoryPageQueryDto } from './dto/history-page-query.dto';
 import { AssigneeNotFoundException } from './exception/assignee-not-found.exception';
 import { InvalidStatusTransitionException } from './exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from './exception/missing-required-fields.exception';
 import { TaskClosedException } from './exception/task-closed.exception';
 import { TaskStateConflictException } from './exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from './exception/unknown-task-type.exception';
+
+/** Applied when the caller sends no `limit` at all. */
+const DEFAULT_HISTORY_PAGE_LIMIT = 20;
+/** A caller-requested `limit` above this is capped rather than rejected — an oversized ask is not a malformed one. */
+const MAX_HISTORY_PAGE_LIMIT = 100;
+
+/** One keyset page of a task's history, plus the `limit` actually applied — the transport layer echoes it back so a client always knows the page size it got. */
+export interface HistoryPage extends CursorPage<TaskStatusHistoryEntry> {
+  readonly limit: number;
+}
 
 /**
  * Single write funnel for the tasks domain. Every mutation opens its own
@@ -113,6 +126,31 @@ export class TaskService {
 
       return updatedTask;
     });
+  }
+
+  /**
+   * The read side of the audit trail every status change writes: confirms
+   * the task exists (a 404 gate, run before paging so a nonexistent task
+   * never reaches the DAO), then serves its transitions oldest-first. Not
+   * wrapped in a transaction — nothing here mutates, so there is nothing to
+   * make atomic.
+   */
+  async getHistoryPage(taskId: string, query: HistoryPageQueryDto): Promise<HistoryPage> {
+    await this.taskDao.getById(taskId);
+
+    const limit = this.resolveHistoryPageLimit(query.limit);
+    const page = await this.taskStatusHistoryDao.findPageByTask(taskId, limit, query.cursor);
+
+    return { ...page, limit };
+  }
+
+  /** Absent defaults to {@link DEFAULT_HISTORY_PAGE_LIMIT}; anything past {@link MAX_HISTORY_PAGE_LIMIT} is capped, not rejected. */
+  private resolveHistoryPageLimit(limit: number | undefined): number {
+    if (limit === undefined) {
+      return DEFAULT_HISTORY_PAGE_LIMIT;
+    }
+
+    return Math.min(limit, MAX_HISTORY_PAGE_LIMIT);
   }
 
   /**
