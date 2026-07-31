@@ -1,9 +1,10 @@
 import { BaseDao, type CursorPage } from '@core/shared';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, DeepPartial, EntityManager } from 'typeorm';
 
 import { READ_CONNECTION } from '../infrastructure/database/database.module';
+import { TaskNotFoundException } from '../task/exception/task-not-found.exception';
 import { TaskEntity } from './entities/task.entity';
 import { Task } from './task.model';
 
@@ -30,9 +31,7 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
    * or the lock would be released the instant the query finishes.
    *
    * Throws when the row is absent, matching every other `getBy*` accessor in
-   * this service: the caller never null-checks the result. A dedicated
-   * domain exception for this outcome isn't wired into this slice yet, so
-   * this uses the framework's own not-found exception in the meantime.
+   * this service: the caller never null-checks the result.
    */
   async getByIdForUpdate(taskId: string, manager: EntityManager): Promise<Task> {
     const entity = await this.repositoryFor(manager).findOne({
@@ -41,7 +40,7 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
     });
 
     if (!entity) {
-      throw new NotFoundException('Task not found');
+      throw new TaskNotFoundException(taskId);
     }
 
     return this.toDomainModel(entity);

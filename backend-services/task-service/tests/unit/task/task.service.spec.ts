@@ -3,27 +3,63 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { TaskStatusHistoryWriteDao } from '../../../src/task/dao/task-status-history-write.dao';
 import { TaskWriteDao } from '../../../src/task/dao/task-write.dao';
 import { Task } from '../../../src/domain/task.model';
+import type { StatusDefinition } from '../../../src/task-type/interfaces/task-type-definition.interface';
 import { TaskTypeRegistry } from '../../../src/task-type/task-type.registry';
+import type { ChangeStatusDto } from '../../../src/task/dto/change-status.dto';
 import { AssigneeNotFoundException } from '../../../src/task/exception/assignee-not-found.exception';
+import { InvalidStatusTransitionException } from '../../../src/task/exception/invalid-status-transition.exception';
+import { MissingRequiredFieldsException } from '../../../src/task/exception/missing-required-fields.exception';
+import { TaskClosedException } from '../../../src/task/exception/task-closed.exception';
+import { TaskNotFoundException } from '../../../src/task/exception/task-not-found.exception';
+import { TaskStateConflictException } from '../../../src/task/exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from '../../../src/task/exception/unknown-task-type.exception';
 import { TaskService } from '../../../src/task/task.service';
 
 const ASSIGNEE_ID = '11111111-1111-1111-1111-111111111111';
+const NEXT_ASSIGNEE_ID = '22222222-2222-2222-2222-222222222222';
 const TRANSACTION_MANAGER = {} as EntityManager;
 
+/**
+ * A three-status type: status 1 is where every task starts, status 3 is the
+ * final status `resolveTargetStatus` must reject moving past. Real field
+ * descriptors are irrelevant here — `fieldValidator` is mocked directly in
+ * every test that would otherwise reach it, never exercised for real.
+ */
+const PROCUREMENT_STATUSES: readonly StatusDefinition[] = [
+  { status: 1, name: 'requested', displayName: 'Requested', requiredFields: [] },
+  { status: 2, name: 'quoted', displayName: 'Quoted', requiredFields: [] },
+  { status: 3, name: 'approved', displayName: 'Approved', requiredFields: [] },
+];
+
 function fakeTask(
-  overrides: Partial<{ id: string; assignedUserId: string; status: number }> = {},
+  overrides: Partial<{
+    id: string;
+    type: string;
+    status: number;
+    isClosed: boolean;
+    assignedUserId: string;
+    customFields: Record<string, unknown>;
+  }> = {},
 ): Task {
   return new Task({
     id: overrides.id ?? 'task-id',
-    type: 'procurement',
+    type: overrides.type ?? 'procurement',
     status: overrides.status ?? 1,
-    isClosed: false,
+    isClosed: overrides.isClosed ?? false,
     assignedUserId: overrides.assignedUserId ?? ASSIGNEE_ID,
-    customFields: {},
+    customFields: overrides.customFields ?? {},
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });
+}
+
+function changeStatusDto(overrides: Partial<ChangeStatusDto> = {}): ChangeStatusDto {
+  return {
+    direction: overrides.direction ?? 'forward',
+    expectedStatus: overrides.expectedStatus ?? 1,
+    nextAssignedUserId: overrides.nextAssignedUserId ?? NEXT_ASSIGNEE_ID,
+    customFields: overrides.customFields,
+  };
 }
 
 /**
@@ -41,33 +77,57 @@ function fakeDataSource(transactionMock: jest.Mock): DataSource {
 interface TaskServiceHarness {
   service: TaskService;
   transactionMock: jest.Mock;
-  taskDao: { create: jest.Mock };
-  taskStatusHistoryDao: { appendCreation: jest.Mock };
+  taskDao: { create: jest.Mock; getByIdForUpdate: jest.Mock; update: jest.Mock };
+  taskStatusHistoryDao: { appendCreation: jest.Mock; append: jest.Mock };
   assigneeExistenceDao: { existsById: jest.Mock };
-  taskTypeRegistry: { findByType: jest.Mock };
+  taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
+  fieldValidator: { validate: jest.Mock };
 }
 
 function taskServiceHarness(
   overrides: Partial<{
-    taskDao: { create: jest.Mock };
-    taskStatusHistoryDao: { appendCreation: jest.Mock };
+    taskDao: { create: jest.Mock; getByIdForUpdate: jest.Mock; update: jest.Mock };
+    taskStatusHistoryDao: { appendCreation: jest.Mock; append: jest.Mock };
     assigneeExistenceDao: { existsById: jest.Mock };
-    taskTypeRegistry: { findByType: jest.Mock };
+    taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
+    fieldValidator: { validate: jest.Mock };
   }> = {},
 ): TaskServiceHarness {
   const transactionMock = jest.fn(
     (runInTransaction: (manager: EntityManager) => Promise<unknown>) =>
       runInTransaction(TRANSACTION_MANAGER),
   );
-  const taskDao = overrides.taskDao ?? { create: jest.fn().mockResolvedValue(fakeTask()) };
+  const taskDao = overrides.taskDao ?? {
+    create: jest.fn().mockResolvedValue(fakeTask()),
+    getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask()),
+    update: jest
+      .fn()
+      .mockImplementation(
+        (
+          taskId: string,
+          params: { status: number; assignedUserId: string; customFields: Record<string, unknown> },
+        ) =>
+          fakeTask({
+            id: taskId,
+            status: params.status,
+            assignedUserId: params.assignedUserId,
+            customFields: params.customFields,
+          }),
+      ),
+  };
   const taskStatusHistoryDao = overrides.taskStatusHistoryDao ?? {
     appendCreation: jest.fn().mockResolvedValue(undefined),
+    append: jest.fn().mockResolvedValue(undefined),
   };
   const assigneeExistenceDao = overrides.assigneeExistenceDao ?? {
     existsById: jest.fn().mockResolvedValue(true),
   };
   const taskTypeRegistry = overrides.taskTypeRegistry ?? {
-    findByType: jest.fn().mockReturnValue({ type: 'procurement' }),
+    findByType: jest.fn().mockReturnValue({ type: 'procurement', statuses: PROCUREMENT_STATUSES }),
+    finalStatusOf: jest.fn().mockReturnValue(3),
+  };
+  const fieldValidator = overrides.fieldValidator ?? {
+    validate: jest.fn().mockReturnValue({ valid: true, sanitizedFields: {} }),
   };
 
   const service = new TaskService(
@@ -76,6 +136,7 @@ function taskServiceHarness(
     taskStatusHistoryDao as unknown as TaskStatusHistoryWriteDao,
     assigneeExistenceDao,
     taskTypeRegistry as unknown as TaskTypeRegistry,
+    fieldValidator,
   );
 
   return {
@@ -85,6 +146,7 @@ function taskServiceHarness(
     taskStatusHistoryDao,
     assigneeExistenceDao,
     taskTypeRegistry,
+    fieldValidator,
   };
 }
 
@@ -93,7 +155,11 @@ describe('TaskService', () => {
     it('should return the inserted task', async () => {
       const insertedTask = fakeTask({ id: 'new-task-id', status: 1 });
       const { service } = taskServiceHarness({
-        taskDao: { create: jest.fn().mockResolvedValue(insertedTask) },
+        taskDao: {
+          create: jest.fn().mockResolvedValue(insertedTask),
+          getByIdForUpdate: jest.fn(),
+          update: jest.fn(),
+        },
       });
 
       const result = await service.createTask({ type: 'procurement', assignedUserId: ASSIGNEE_ID });
@@ -104,7 +170,11 @@ describe('TaskService', () => {
     it('should insert the task and append its creation history row inside one transaction', async () => {
       const insertedTask = fakeTask({ id: 'new-task-id', status: 1 });
       const { service, transactionMock, taskDao, taskStatusHistoryDao } = taskServiceHarness({
-        taskDao: { create: jest.fn().mockResolvedValue(insertedTask) },
+        taskDao: {
+          create: jest.fn().mockResolvedValue(insertedTask),
+          getByIdForUpdate: jest.fn(),
+          update: jest.fn(),
+        },
       });
 
       await service.createTask({ type: 'procurement', assignedUserId: ASSIGNEE_ID });
@@ -127,7 +197,10 @@ describe('TaskService', () => {
   describe('Given:a type the registry does not recognize, When:createTask is called', () => {
     it('should reject with UnknownTaskTypeException and write nothing', async () => {
       const { service, taskDao, taskStatusHistoryDao, assigneeExistenceDao } = taskServiceHarness({
-        taskTypeRegistry: { findByType: jest.fn().mockReturnValue(null) },
+        taskTypeRegistry: {
+          findByType: jest.fn().mockReturnValue(null),
+          finalStatusOf: jest.fn(),
+        },
       });
 
       await expect(
@@ -159,7 +232,10 @@ describe('TaskService', () => {
     it('should propagate the failure out of the transaction rather than returning a task', async () => {
       const failure = new Error('constraint violation');
       const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
-        taskStatusHistoryDao: { appendCreation: jest.fn().mockRejectedValue(failure) },
+        taskStatusHistoryDao: {
+          appendCreation: jest.fn().mockRejectedValue(failure),
+          append: jest.fn(),
+        },
       });
 
       await expect(
@@ -173,6 +249,385 @@ describe('TaskService', () => {
       // leaving the task row stranded without its history entry.
       expect(taskDao.create).toHaveBeenCalledTimes(1);
       expect(taskStatusHistoryDao.appendCreation).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Given:no task exists for the id, When:changeStatus is called', () => {
+    it('should reject with TaskNotFoundException and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockRejectedValue(new TaskNotFoundException('missing-task')),
+          update: jest.fn(),
+        },
+      });
+
+      await expect(service.changeStatus('missing-task', changeStatusDto())).rejects.toThrow(
+        TaskNotFoundException,
+      );
+
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:the task is already closed, When:changeStatus is called', () => {
+    it('should reject with TaskClosedException and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ isClosed: true })),
+          update: jest.fn(),
+        },
+      });
+
+      await expect(service.changeStatus('task-id', changeStatusDto())).rejects.toThrow(
+        TaskClosedException,
+      );
+
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Given:the caller's expectedStatus no longer matches the task's current status, When:changeStatus is called", () => {
+    it('should reject with TaskStateConflictException carrying the current status and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 2 })),
+          update: jest.fn(),
+        },
+      });
+
+      // A stale client (or a duplicate submit of the same request) still
+      // believes the task is at status 1 — the real row has already moved on.
+      const request = changeStatusDto({ expectedStatus: 1 });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        TaskStateConflictException,
+      );
+      await expect(service.changeStatus('task-id', request)).rejects.toMatchObject({
+        details: { currentStatus: 2 },
+      });
+
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Given:a forward move already at the task type's final status, When:changeStatus is called", () => {
+    it('should reject with InvalidStatusTransitionException and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao, fieldValidator } =
+        taskServiceHarness({
+          taskDao: {
+            create: jest.fn(),
+            getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 3 })),
+            update: jest.fn(),
+          },
+        });
+
+      const request = changeStatusDto({ direction: 'forward', expectedStatus: 3 });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        InvalidStatusTransitionException,
+      );
+
+      expect(fieldValidator.validate).not.toHaveBeenCalled();
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:a backward move at status 1, When:changeStatus is called', () => {
+    it('should reject with InvalidStatusTransitionException and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao, fieldValidator } =
+        taskServiceHarness({
+          taskDao: {
+            create: jest.fn(),
+            getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 1 })),
+            update: jest.fn(),
+          },
+        });
+
+      const request = changeStatusDto({ direction: 'backward', expectedStatus: 1 });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        InvalidStatusTransitionException,
+      );
+
+      expect(fieldValidator.validate).not.toHaveBeenCalled();
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:a forward move missing a required field, When:changeStatus is called', () => {
+    it('should reject with MissingRequiredFieldsException and write nothing', async () => {
+      const { service, taskDao, assigneeExistenceDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 1 })),
+          update: jest.fn(),
+        },
+        fieldValidator: {
+          validate: jest
+            .fn()
+            .mockReturnValue({ valid: false, missing: ['branchName'], invalid: {} }),
+        },
+      });
+
+      const request = changeStatusDto({
+        direction: 'forward',
+        expectedStatus: 1,
+        customFields: {},
+      });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        MissingRequiredFieldsException,
+      );
+
+      expect(assigneeExistenceDao.existsById).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:the next assignee does not exist, When:changeStatus is called forward', () => {
+    it('should reject with AssigneeNotFoundException and write nothing', async () => {
+      const { service, taskDao, taskStatusHistoryDao } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 1 })),
+          update: jest.fn(),
+        },
+        assigneeExistenceDao: { existsById: jest.fn().mockResolvedValue(false) },
+      });
+
+      const request = changeStatusDto({ direction: 'forward', expectedStatus: 1 });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        AssigneeNotFoundException,
+      );
+
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:the next assignee does not exist, When:changeStatus is called backward', () => {
+    it('should reject with AssigneeNotFoundException even though backward ignores customFields', async () => {
+      const { service, taskDao, taskStatusHistoryDao, fieldValidator } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest.fn().mockResolvedValue(fakeTask({ status: 2 })),
+          update: jest.fn(),
+        },
+        assigneeExistenceDao: { existsById: jest.fn().mockResolvedValue(false) },
+      });
+
+      const request = changeStatusDto({ direction: 'backward', expectedStatus: 2 });
+
+      await expect(service.changeStatus('task-id', request)).rejects.toThrow(
+        AssigneeNotFoundException,
+      );
+
+      expect(fieldValidator.validate).not.toHaveBeenCalled();
+      expect(taskDao.update).not.toHaveBeenCalled();
+      expect(taskStatusHistoryDao.append).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Given:a valid forward move, When:changeStatus is called', () => {
+    it('should return the task with fields merged onto its existing custom fields', async () => {
+      const { service } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest
+            .fn()
+            .mockResolvedValue(
+              fakeTask({ id: 'task-id', status: 1, customFields: { existing: 'x' } }),
+            ),
+          update: jest.fn().mockImplementation(
+            (
+              taskId: string,
+              params: {
+                status: number;
+                assignedUserId: string;
+                customFields: Record<string, unknown>;
+              },
+            ) => fakeTask({ id: taskId, ...params }),
+          ),
+        },
+        fieldValidator: {
+          validate: jest
+            .fn()
+            .mockReturnValue({ valid: true, sanitizedFields: { branchName: 'main' } }),
+        },
+      });
+
+      const request = changeStatusDto({
+        direction: 'forward',
+        expectedStatus: 1,
+        customFields: { branchName: 'feature/login' },
+      });
+
+      const result = await service.changeStatus('task-id', request);
+
+      expect(result.status).toBe(2);
+      expect(result.assignedUserId).toBe(NEXT_ASSIGNEE_ID);
+      expect(result.customFields).toEqual({ existing: 'x', branchName: 'main' });
+    });
+
+    it('should validate against the target status, update the row once and append a history row inside one transaction', async () => {
+      const { service, transactionMock, taskDao, taskStatusHistoryDao, fieldValidator } =
+        taskServiceHarness({
+          taskDao: {
+            create: jest.fn(),
+            getByIdForUpdate: jest
+              .fn()
+              .mockResolvedValue(
+                fakeTask({ id: 'task-id', status: 1, customFields: { existing: 'x' } }),
+              ),
+            update: jest.fn().mockImplementation(
+              (
+                taskId: string,
+                params: {
+                  status: number;
+                  assignedUserId: string;
+                  customFields: Record<string, unknown>;
+                },
+              ) => fakeTask({ id: taskId, ...params }),
+            ),
+          },
+          fieldValidator: {
+            validate: jest
+              .fn()
+              .mockReturnValue({ valid: true, sanitizedFields: { branchName: 'main' } }),
+          },
+        });
+
+      const request = changeStatusDto({
+        direction: 'forward',
+        expectedStatus: 1,
+        customFields: { branchName: 'feature/login' },
+      });
+
+      await service.changeStatus('task-id', request);
+
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+      // Validated against status 2's definition — the target of the move,
+      // not the task's current status.
+      expect(fieldValidator.validate).toHaveBeenCalledWith(
+        { branchName: 'feature/login' },
+        PROCUREMENT_STATUSES[1],
+      );
+      expect(taskDao.update).toHaveBeenCalledWith(
+        'task-id',
+        {
+          status: 2,
+          assignedUserId: NEXT_ASSIGNEE_ID,
+          customFields: { existing: 'x', branchName: 'main' },
+        },
+        TRANSACTION_MANAGER,
+      );
+      expect(taskStatusHistoryDao.append).toHaveBeenCalledWith(
+        {
+          taskId: 'task-id',
+          fromStatus: 1,
+          toStatus: 2,
+          assignedUserId: NEXT_ASSIGNEE_ID,
+          fieldsSnapshot: { branchName: 'main' },
+        },
+        TRANSACTION_MANAGER,
+      );
+    });
+  });
+
+  describe('Given:a valid backward move, When:changeStatus is called', () => {
+    it("should return the task with its custom fields unchanged, ignoring the request's customFields", async () => {
+      const { service } = taskServiceHarness({
+        taskDao: {
+          create: jest.fn(),
+          getByIdForUpdate: jest
+            .fn()
+            .mockResolvedValue(
+              fakeTask({ id: 'task-id', status: 2, customFields: { existing: 'x' } }),
+            ),
+          update: jest.fn().mockImplementation(
+            (
+              taskId: string,
+              params: {
+                status: number;
+                assignedUserId: string;
+                customFields: Record<string, unknown>;
+              },
+            ) => fakeTask({ id: taskId, ...params }),
+          ),
+        },
+      });
+
+      const request = changeStatusDto({
+        direction: 'backward',
+        expectedStatus: 2,
+        customFields: { ignoredField: 'should never reach validation or storage' },
+      });
+
+      const result = await service.changeStatus('task-id', request);
+
+      expect(result.status).toBe(1);
+      expect(result.customFields).toEqual({ existing: 'x' });
+    });
+
+    it('should skip field validation, update the row once and append a history row with an empty fields snapshot', async () => {
+      const { service, transactionMock, taskDao, taskStatusHistoryDao, fieldValidator } =
+        taskServiceHarness({
+          taskDao: {
+            create: jest.fn(),
+            getByIdForUpdate: jest
+              .fn()
+              .mockResolvedValue(
+                fakeTask({ id: 'task-id', status: 2, customFields: { existing: 'x' } }),
+              ),
+            update: jest.fn().mockImplementation(
+              (
+                taskId: string,
+                params: {
+                  status: number;
+                  assignedUserId: string;
+                  customFields: Record<string, unknown>;
+                },
+              ) => fakeTask({ id: taskId, ...params }),
+            ),
+          },
+        });
+
+      const request = changeStatusDto({ direction: 'backward', expectedStatus: 2 });
+
+      await service.changeStatus('task-id', request);
+
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+      expect(fieldValidator.validate).not.toHaveBeenCalled();
+      expect(taskDao.update).toHaveBeenCalledWith(
+        'task-id',
+        { status: 1, assignedUserId: NEXT_ASSIGNEE_ID, customFields: { existing: 'x' } },
+        TRANSACTION_MANAGER,
+      );
+      expect(taskStatusHistoryDao.append).toHaveBeenCalledWith(
+        {
+          taskId: 'task-id',
+          fromStatus: 2,
+          toStatus: 1,
+          assignedUserId: NEXT_ASSIGNEE_ID,
+          fieldsSnapshot: {},
+        },
+        TRANSACTION_MANAGER,
+      );
     });
   });
 });
