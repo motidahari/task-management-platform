@@ -27,5 +27,17 @@
     "dark-mode-label": "Dark",
     "switch-to-light-label": "Switch to light mode",
     "switch-to-dark-label": "Switch to dark mode"
+  },
+  "shared-errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "We couldn't reach the server. Check your connection and try again.",
+    "invalid-details": "One of the details is incorrect. Please review and try again.",
+    "task-not-found": "This task no longer exists.",
+    "user-not-found": "This user no longer exists.",
+    "task-closed": "This task is already closed.",
+    "task-changed": "This task was updated elsewhere — we've refreshed it with the latest state.",
+    "invalid-action": "This action isn't available right now.",
+    "missing-fields": "Please fill in all required fields.",
+    "too-many-requests": "Too many requests — please wait a moment and try again."
   }
 }
