@@ -96,6 +96,32 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
     });
   });
 
+  describe('Given:a task row exists, When:getById is called with its id', () => {
+    it('should return the mapped Task domain model without taking a lock', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const taskRepository = testDatabase.dataSource.getRepository(TaskEntity);
+      const user = await userRepository.save(buildTestUser());
+      const savedTask = await taskRepository.save(
+        buildTestTask(user.id, { customFields: { quote1: '100 USD' } }),
+      );
+
+      const task = await taskDao.getById(savedTask.id);
+
+      expect(task.id).toBe(savedTask.id);
+      expect(task.type).toBe('procurement');
+      expect(task.assignedUserId).toBe(user.id);
+      expect(task.customFields).toEqual({ quote1: '100 USD' });
+    });
+  });
+
+  describe('Given:no task with that id, When:getById is called', () => {
+    it('should throw NotFoundException', async () => {
+      await expect(taskDao.getById('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('Given:a task whose custom_fields already holds a prior value, When:a forward transition merges a new one in', () => {
     it('should round-trip the merged JSONB object', async () => {
       const userRepository = testDatabase.dataSource.getRepository(UserEntity);
