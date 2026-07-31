@@ -1,4 +1,11 @@
-import { isNonEmptyString, isPlainObject, isValidDate, ValidationException } from '@core/shared';
+import {
+  isValidBoolean,
+  isValidDate,
+  isValidNumber,
+  isValidObject,
+  isValidString,
+  ValidationException,
+} from '@core/shared';
 
 /**
  * Constructor/setter input — everything a `Task` needs to exist, independent
@@ -68,7 +75,7 @@ export class Task {
   }
 
   set id(value: string) {
-    if (!isNonEmptyString(value)) {
+    if (!isValidString(value)) {
       throw new ValidationException('Task id must be a non-empty string');
     }
 
@@ -80,7 +87,7 @@ export class Task {
   }
 
   set type(value: string) {
-    if (!isNonEmptyString(value)) {
+    if (!isValidString(value)) {
       throw new ValidationException('Task type must be a non-empty string');
     }
 
@@ -97,7 +104,7 @@ export class Task {
    * "closed task's status" rule to enforce elsewhere.
    */
   set status(value: number) {
-    if (!Number.isInteger(value) || value < 1) {
+    if (!isValidNumber(value, { integer: true, min: 1 })) {
       throw new ValidationException('Task status must be an integer of at least 1');
     }
 
@@ -109,7 +116,7 @@ export class Task {
   }
 
   set isClosed(value: boolean) {
-    if (typeof value !== 'boolean') {
+    if (!isValidBoolean(value)) {
       throw new ValidationException('Task isClosed must be a boolean');
     }
 
@@ -121,7 +128,7 @@ export class Task {
   }
 
   set assignedUserId(value: string) {
-    if (!isNonEmptyString(value)) {
+    if (!isValidString(value)) {
       throw new ValidationException('Task assignedUserId must be a non-empty string');
     }
 
@@ -133,7 +140,7 @@ export class Task {
   }
 
   set customFields(value: Record<string, unknown>) {
-    if (!isPlainObject(value)) {
+    if (!isValidObject(value)) {
       throw new ValidationException('Task customFields must be an object');
     }
 
