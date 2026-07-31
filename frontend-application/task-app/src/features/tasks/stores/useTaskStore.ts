@@ -10,6 +10,7 @@ import { taskService } from '../services/taskService';
 import type {
   ChangeTaskStatusDto,
   CreateTaskDto,
+  TaskHistoryEntry,
   TaskListFilters,
 } from '../services/taskService.dto';
 import type { Task } from '../types';
@@ -20,12 +21,20 @@ export interface FetchTasksForUserOptions extends TaskListFilters {
   readonly limit?: number;
 }
 
+export interface FetchTaskHistoryOptions {
+  /** Omit for the first page; pass the store's `historyNextCursor` to load the next one. */
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
 export interface TaskStoreState {
   readonly items: readonly Task[];
   readonly nextCursor: string | null;
   readonly currentTask: Task | null;
   /** The user the currently loaded `items` page was fetched for — `applyTaskEvent` needs it to tell "reassigned onto this list" from "reassigned away from it". */
   readonly listUserId: string | null;
+  readonly historyItems: readonly TaskHistoryEntry[];
+  readonly historyNextCursor: string | null;
   readonly isLoading: boolean;
   readonly error: ApiError | null;
   fetchTasksForUser: (userId: string, options?: FetchTasksForUserOptions) => Promise<boolean>;
@@ -33,18 +42,28 @@ export interface TaskStoreState {
   createTask: (dto: CreateTaskDto) => Promise<boolean>;
   changeTaskStatus: (taskId: string, dto: ChangeTaskStatusDto) => Promise<boolean>;
   closeTask: (taskId: string) => Promise<boolean>;
+  fetchTaskHistory: (taskId: string, options?: FetchTaskHistoryOptions) => Promise<boolean>;
   applyTaskEvent: (payload: TaskEventPayload) => void;
   reset: () => void;
 }
 
 const initialState: Pick<
   TaskStoreState,
-  'items' | 'nextCursor' | 'currentTask' | 'listUserId' | 'isLoading' | 'error'
+  | 'items'
+  | 'nextCursor'
+  | 'currentTask'
+  | 'listUserId'
+  | 'historyItems'
+  | 'historyNextCursor'
+  | 'isLoading'
+  | 'error'
 > = {
   items: [],
   nextCursor: null,
   currentTask: null,
   listUserId: null,
+  historyItems: [],
+  historyNextCursor: null,
   isLoading: false,
   error: null,
 };
@@ -203,6 +222,21 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
       return true;
     } catch (caughtError) {
       return handleTaskRequestFailure(caughtError, set, { taskId, refetchTask: get().fetchTask });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchTaskHistory: async (taskId, options): Promise<boolean> => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const page = await taskService.getTaskHistory(taskId, options);
+      const historyItems = options?.cursor ? [...get().historyItems, ...page.items] : page.items;
+      set({ historyItems, historyNextCursor: page.nextCursor });
+      return true;
+    } catch (caughtError) {
+      return handleTaskRequestFailure(caughtError, set);
     } finally {
       set({ isLoading: false });
     }

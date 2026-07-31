@@ -3,6 +3,8 @@ import type { Task } from '../types';
 import type {
   ChangeTaskStatusDto,
   CreateTaskDto,
+  TaskHistoryParams,
+  TaskHistoryPage,
   TaskListFilters,
   TaskListPage,
 } from './taskService.dto';
@@ -42,6 +44,11 @@ export class TaskService extends BaseHttpService {
 
   closeTask(taskId: string): Promise<Task> {
     return this.post<Task>(`/tasks/${taskId}/close`);
+  }
+
+  /** Keyset-paginated transition history, oldest first — `params.cursor` continues a prior page. */
+  getTaskHistory(taskId: string, params?: TaskHistoryParams): Promise<TaskHistoryPage> {
+    return this.get<TaskHistoryPage>(`/tasks/${taskId}/history`, params as Record<string, unknown>);
   }
 }
 

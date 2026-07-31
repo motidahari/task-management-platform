@@ -1,0 +1,63 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.task-detail-view {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-lg);
+
+  &--error {
+    @include mixins.flx($direction: column, $align: flex-start, $gap: vars.$spacing-md);
+  }
+
+  &__header {
+    @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
+    margin-bottom: vars.$spacing-md;
+  }
+
+  &__title {
+    margin: 0;
+    color: var(--color-text);
+  }
+
+  &__fields {
+    margin-top: vars.$spacing-md;
+
+    dl {
+      margin: 0;
+    }
+  }
+
+  &__field {
+    @include mixins.flx($justify: space-between, $gap: vars.$spacing-sm);
+    padding: vars.$spacing-xs 0;
+    border-bottom: 1px solid var(--color-border);
+
+    dt {
+      color: var(--color-text-secondary);
+    }
+
+    dd {
+      margin: 0;
+      color: var(--color-text);
+    }
+  }
+
+  &__actions {
+    margin-top: vars.$spacing-lg;
+  }
+
+  &__action-buttons {
+    @include mixins.flx($gap: vars.$spacing-sm, $wrap: wrap);
+  }
+
+  &__form {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+  }
+
+  &__form-actions {
+    @include mixins.flx($gap: vars.$spacing-sm);
+  }
+
+  &__error-message {
+    color: var(--color-danger);
+  }
+}
