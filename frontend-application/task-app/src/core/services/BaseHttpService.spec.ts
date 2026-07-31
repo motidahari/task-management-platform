@@ -1,4 +1,4 @@
-import { ErrorCode } from '@core/shared';
+import { ErrorCode } from '@core/shared/error-codes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BaseHttpService } from './BaseHttpService';

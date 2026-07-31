@@ -13,6 +13,10 @@
     "./error-codes": {
       "types": "./dist/error-codes.d.ts",
       "default": "./dist/error-codes.js"
+    },
+    "./errors/error-response": {
+      "types": "./dist/errors/error-response.d.ts",
+      "default": "./dist/errors/error-response.js"
     }
   },
   "scripts": {

@@ -3,9 +3,14 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
-  // @core/shared ships CommonJS; pre-bundle it so its named exports resolve
-  // through esbuild's interop instead of being served as raw CJS.
-  optimizeDeps: { include: ['@core/shared'] },
+  // @core/shared ships CommonJS; pre-bundle the browser-safe entry points so
+  // their named exports resolve through esbuild's interop instead of being
+  // served as raw CJS. The bare barrel is deliberately excluded — it re-exports
+  // NestJS-backed filters/exceptions that reference `process` and break in the
+  // browser; the app only needs the error-code and error-response modules.
+  optimizeDeps: {
+    include: ['@core/shared/error-codes', '@core/shared/errors/error-response'],
+  },
   build: { commonjsOptions: { include: [/@core\/shared/, /node_modules/] } },
   test: {
     globals: true,
