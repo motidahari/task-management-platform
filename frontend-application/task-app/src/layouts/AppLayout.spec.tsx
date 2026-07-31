@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppLayout } from './AppLayout';
 
@@ -20,26 +20,32 @@ vi.mock('../shared/components/Modal', () => ({
   ModalHost: () => <div data-testid="modal-host" />,
 }));
 
-function renderAppLayout(): ReturnType<typeof render> {
-  return render(
-    <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<div>routed content</div>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
-  );
-}
+describe('AppLayout', () => {
+  function renderAppLayout(): ReturnType<typeof render> {
+    return render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<div>routed content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
 
-describe('AppLayout, Given:a routed child', () => {
-  it('should render the header, the routed outlet content, and both global overlay hosts', () => {
-    renderAppLayout();
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    expect(screen.getByText('app-layout.title')).toBeInTheDocument();
-    expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
-    expect(screen.getByText('routed content')).toBeInTheDocument();
-    expect(screen.getByTestId('toast-host')).toBeInTheDocument();
-    expect(screen.getByTestId('modal-host')).toBeInTheDocument();
+  describe('Given:a routed child', () => {
+    it('should render the header, the routed outlet content, and both global overlay hosts', () => {
+      renderAppLayout();
+
+      expect(screen.getByText('app-layout.title')).toBeInTheDocument();
+      expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();
+      expect(screen.getByText('routed content')).toBeInTheDocument();
+      expect(screen.getByTestId('toast-host')).toBeInTheDocument();
+      expect(screen.getByTestId('modal-host')).toBeInTheDocument();
+    });
   });
 });
