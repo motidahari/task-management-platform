@@ -53,30 +53,24 @@ export class TaskWriteDao extends TaskDao {
     params: { status: number; assignedUserId: string; customFields: Record<string, unknown> },
     manager: EntityManager,
   ): Promise<Task> {
-    const updateResult = await this.repositoryFor(manager)
-      .createQueryBuilder()
-      .update(TaskEntity)
-      .set({
+    return this.updateByIdReturning(
+      taskId,
+      {
         status: params.status,
         assignedUserId: params.assignedUserId,
         customFields: params.customFields,
-      } as QueryDeepPartialEntity<TaskEntity>)
-      .where('id = :taskId', { taskId })
-      .returning('*')
-      .execute();
-
-    const [rawRow] = updateResult.raw as RawUpdatedTaskRow[];
-
-    if (!rawRow) {
-      // The caller already holds this row's write lock inside the same
-      // transaction — an update matching zero rows here would mean the id
-      // vanished between the lock and this statement, which the lock rules
-      // out. Not a client-facing outcome, so a plain `Error` rather than a
-      // typed exception.
-      throw new Error(`Update of task ${taskId} returned no row.`);
-    }
-
-    return this.toDomainModel(toTaskEntity(rawRow));
+      } as QueryDeepPartialEntity<TaskEntity>,
+      (rawRow: unknown) => toTaskEntity(rawRow as RawUpdatedTaskRow),
+      () => {
+        // The caller already holds this row's write lock inside the same
+        // transaction — an update matching zero rows here would mean the id
+        // vanished between the lock and this statement, which the lock rules
+        // out. Not a client-facing outcome, so a plain `Error` rather than a
+        // typed exception.
+        throw new Error(`Update of task ${taskId} returned no row.`);
+      },
+      manager,
+    );
   }
 
   /**
@@ -88,24 +82,18 @@ export class TaskWriteDao extends TaskDao {
    * atomically with the history row the service appends alongside it.
    */
   async close(taskId: string, manager: EntityManager): Promise<Task> {
-    const updateResult = await this.repositoryFor(manager)
-      .createQueryBuilder()
-      .update(TaskEntity)
-      .set({ isClosed: true })
-      .where('id = :taskId', { taskId })
-      .returning('*')
-      .execute();
-
-    const [rawRow] = updateResult.raw as RawUpdatedTaskRow[];
-
-    if (!rawRow) {
-      // Same reasoning as `update`: the caller already holds this row's
-      // write lock, so a zero-row match here is a registry inconsistency,
-      // not a client-facing outcome.
-      throw new Error(`Close of task ${taskId} returned no row.`);
-    }
-
-    return this.toDomainModel(toTaskEntity(rawRow));
+    return this.updateByIdReturning(
+      taskId,
+      { isClosed: true },
+      (rawRow: unknown) => toTaskEntity(rawRow as RawUpdatedTaskRow),
+      () => {
+        // Same reasoning as `update`: the caller already holds this row's
+        // write lock, so a zero-row match here is a registry inconsistency,
+        // not a client-facing outcome.
+        throw new Error(`Close of task ${taskId} returned no row.`);
+      },
+      manager,
+    );
   }
 }
 

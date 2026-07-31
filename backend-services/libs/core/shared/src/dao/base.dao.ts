@@ -3,10 +3,12 @@ import type {
   DeepPartial,
   EntityManager,
   EntityTarget,
+  FindOptionsWhere,
   ObjectLiteral,
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import {
   type CursorPage,
@@ -68,6 +70,65 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
     const entity = await repository.save(repository.create(partial));
 
     return this.toDomainModel(entity);
+  }
+
+  /**
+   * Reads one row and maps it to the domain model, throwing `onMissing()` when
+   * no row matches — the find-one-or-throw every accessor otherwise repeats, so
+   * a caller never null-checks the result. `manager` binds the read to an
+   * ongoing transaction (and is required to hold a `lock`, which is only
+   * meaningful on the primary inside a transaction); without one the read runs
+   * on the replica-capable connection. Only the criteria, the lock, and the
+   * not-found exception differ between call sites, so those are the only knobs.
+   */
+  protected async findOneOrThrow(
+    where: FindOptionsWhere<TEntity>,
+    onMissing: () => never,
+    options: { manager?: EntityManager; lock?: { mode: 'pessimistic_write' } } = {},
+  ): Promise<TDomain> {
+    const repository = options.manager ? this.repositoryFor(options.manager) : this.readRepository;
+    const entity = await repository.findOne({ where, lock: options.lock });
+
+    if (!entity) {
+      onMissing();
+    }
+
+    return this.toDomainModel(entity);
+  }
+
+  /**
+   * Updates the row with this `id` and maps the row the same statement returns
+   * back to the domain model — `RETURNING *` in one round trip, so no follow-up
+   * `SELECT` can observe a different snapshot than the write it confirms. Runs
+   * on the caller's transaction `manager` so it commits with whatever else that
+   * transaction does; throws `onMissing()` when the update matches no row.
+   *
+   * Postgres returns `RETURNING` rows raw (snake-cased columns, undecorated),
+   * not hydrated entities, so the concrete DAO supplies `mapRawRow` to translate
+   * that one shape — the only piece here that knows the table's columns.
+   */
+  protected async updateByIdReturning(
+    id: string,
+    set: QueryDeepPartialEntity<TEntity>,
+    mapRawRow: (rawRow: unknown) => TEntity,
+    onMissing: () => never,
+    manager: EntityManager,
+  ): Promise<TDomain> {
+    const updateResult = await this.repositoryFor(manager)
+      .createQueryBuilder()
+      .update(this.entity)
+      .set(set)
+      .where('id = :id', { id })
+      .returning('*')
+      .execute();
+
+    const [rawRow] = updateResult.raw as unknown[];
+
+    if (rawRow === undefined) {
+      onMissing();
+    }
+
+    return this.toDomainModel(mapRawRow(rawRow));
   }
 
   /**
