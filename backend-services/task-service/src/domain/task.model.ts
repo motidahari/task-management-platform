@@ -1,4 +1,4 @@
-import { ValidationException } from '@core/shared';
+import { isNonEmptyString, isPlainObject, isValidDate, ValidationException } from '@core/shared';
 
 /**
  * Constructor/setter input — everything a `Task` needs to exist, independent
@@ -177,16 +177,4 @@ export class Task {
       updatedAt: this._updatedAt,
     };
   }
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isValidDate(value: unknown): value is Date {
-  return value instanceof Date && !Number.isNaN(value.getTime());
 }
