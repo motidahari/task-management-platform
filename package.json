@@ -4,7 +4,7 @@
   "private": true,
   "description": "Task-management platform with a generic workflow engine and plug-in task types",
   "engines": {
-    "node": ">=20"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "workspaces": [
     "backend-services/libs/core/*",
@@ -31,5 +31,11 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
     "yaml": "^2.9.0"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9",
+    "@nestjs/swagger": {
+      "js-yaml": "5.2.2"
+    }
   }
 }
