@@ -17,6 +17,7 @@ import type { Namespace, Socket } from 'socket.io';
 import { APP_CONFIG, type AppConfig } from '../infrastructure/config/app.config';
 import { SOCKET_CONNECTIONS_GAUGE_NAME } from '../metrics/metrics.constants';
 import { REALTIME_REDIS_ADAPTER, type RealtimeRedisAdapterFactory } from './redis-adapter.provider';
+import { taskRoom, userRoom } from './rooms';
 
 const REALTIME_NAMESPACE = '/realtime';
 
@@ -47,14 +48,6 @@ interface TaskRoomMessage {
   readonly taskId: string;
 }
 
-function userRoom(userId: string): string {
-  return `user:${userId}`;
-}
-
-function taskRoom(taskId: string): string {
-  return `task:${taskId}`;
-}
-
 /**
  * Connection lifecycle and room membership only — event emission is the
  * publisher's job (kept out of this class so it stays a leaf transport
@@ -73,6 +66,16 @@ export class RealtimeGateway
   private readonly server!: Namespace;
 
   private readonly maxConnections: number;
+
+  /**
+   * Read-only escape hatch for {@link TaskEventsPublisher} — the one other
+   * class in this module allowed to reach the underlying namespace, so it
+   * can emit to rooms without this gateway growing emit responsibilities of
+   * its own (connection lifecycle and room membership stay its only job).
+   */
+  get namespace(): Namespace {
+    return this.server;
+  }
 
   constructor(
     @Inject(APP_CONFIG) config: AppConfig,
