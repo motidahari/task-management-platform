@@ -33,4 +33,11 @@ describe('ensureEnvFile', () => {
     assert.equal(created, false);
     assert.equal(readFileSync(join(root, '.env'), 'utf8'), 'POSTGRES_PASSWORD=mine\n');
   });
+
+  it('creates a custom target file (e.g. .env.local) from the example', () => {
+    const created = ensureEnvFile(root, '.env.local');
+
+    assert.equal(created, true);
+    assert.equal(readFileSync(join(root, '.env.local'), 'utf8'), 'POSTGRES_PASSWORD=change-me\n');
+  });
 });
