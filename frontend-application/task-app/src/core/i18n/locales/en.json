@@ -38,6 +38,38 @@
     "switch-to-light-label": "Switch to light mode",
     "switch-to-dark-label": "Switch to dark mode"
   },
+  "task-lifecycle": {
+    "advanced-toast": "Task advanced.",
+    "reversed-toast": "Task reversed.",
+    "closed-toast": "Task closed."
+  },
+  "assignee-select": {
+    "label": "Next assignee",
+    "placeholder": "Choose an assignee"
+  },
+  "history-timeline": {
+    "created-transition": "Created → {{to}}",
+    "changed-transition": "{{from}} → {{to}}",
+    "closed-transition": "{{from}} → Closed",
+    "assignee-label": "Assigned to {{userId}}",
+    "empty-message": "No history yet.",
+    "load-more-button": "Load more"
+  },
+  "task-detail-view": {
+    "closed-badge": "Closed",
+    "fields-heading": "Details",
+    "no-fields-message": "No details recorded for this status.",
+    "advance-button": "Advance",
+    "reverse-button": "Reverse",
+    "close-button": "Close task",
+    "submit-button": "Submit",
+    "cancel-button": "Cancel",
+    "close-confirm-title": "Close this task?",
+    "close-confirm-message": "This can't be undone. The task will be marked closed.",
+    "close-confirm-button": "Close task",
+    "retry-button": "Retry",
+    "history-heading": "History"
+  },
   "shared-errors": {
     "generic": "Something went wrong. Please try again.",
     "network": "We couldn't reach the server. Check your connection and try again.",

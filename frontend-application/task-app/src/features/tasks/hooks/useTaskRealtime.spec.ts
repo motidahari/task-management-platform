@@ -45,6 +45,8 @@ describe('useTaskRealtime', () => {
     nextCursor: null,
     currentTask: null,
     listUserId: null,
+    historyItems: [],
+    historyNextCursor: null,
     isLoading: false,
     error: null,
     fetchTasksForUser: vi.fn(),
@@ -52,6 +54,7 @@ describe('useTaskRealtime', () => {
     createTask: vi.fn(),
     changeTaskStatus: vi.fn(),
     closeTask: vi.fn(),
+    fetchTaskHistory: vi.fn(),
     applyTaskEvent,
     reset: vi.fn(),
   };

@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Task } from '../types';
 import { TaskService } from './taskService';
-import type { ChangeTaskStatusDto, CreateTaskDto, TaskListPage } from './taskService.dto';
+import type {
+  ChangeTaskStatusDto,
+  CreateTaskDto,
+  TaskHistoryPage,
+  TaskListPage,
+} from './taskService.dto';
 
 const { httpMockInstance, createMock } = vi.hoisted(() => {
   const instance = {
@@ -103,6 +108,32 @@ describe('TaskService', () => {
 
       expect(httpMockInstance.post).toHaveBeenCalledWith('/tasks/t-1/close', undefined);
       expect(result).toEqual(closedTask);
+    });
+  });
+
+  describe('Given:a request for a task’s transition history', () => {
+    it('should GET /tasks/:id/history with the pagination params and resolve with the page', async () => {
+      const page: TaskHistoryPage = {
+        items: [
+          {
+            fromStatus: null,
+            toStatus: 1,
+            assignedUserId: 'u-1',
+            fieldsSnapshot: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        nextCursor: 'cursor-1',
+        limit: 20,
+      };
+      httpMockInstance.get.mockResolvedValueOnce({ data: page });
+
+      const result = await service.getTaskHistory('t-1', { cursor: 'cursor-0' });
+
+      expect(httpMockInstance.get).toHaveBeenCalledWith('/tasks/t-1/history', {
+        params: { cursor: 'cursor-0' },
+      });
+      expect(result).toEqual(page);
     });
   });
 
