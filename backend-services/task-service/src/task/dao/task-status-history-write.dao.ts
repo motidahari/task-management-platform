@@ -22,32 +22,16 @@ export class TaskStatusHistoryWriteDao extends TaskStatusHistoryDao {
   }
 
   /**
-   * Appends one immutable audit-trail row. Must run inside the caller's
-   * transaction `manager` so it commits atomically with the mutation it
-   * records — a task without its matching history row (or the reverse)
-   * would be a corrupt audit trail.
-   */
-  async append(
-    entry: {
-      taskId: string;
-      fromStatus: number | null;
-      toStatus: number | null;
-      assignedUserId: string;
-      fieldsSnapshot: Record<string, unknown>;
-    },
-    manager: EntityManager,
-  ): Promise<TaskStatusHistoryEntry> {
-    return await this.insertOne(entry, manager);
-  }
-
-  /**
-   * Appends the creation entry for a task that was just inserted — derived
-   * entirely from that task, so the caller never assembles a history row by
-   * hand. `fromStatus: null` marks this as the creation transition; the
-   * snapshot is the task's own custom fields at the moment it was made.
+   * Appends the immutable creation entry for a task that was just inserted,
+   * derived entirely from that task so no caller assembles a history row by
+   * hand — `fromStatus: null` marks the creation transition, the snapshot is
+   * the task's own custom fields at that moment. Must run inside the caller's
+   * transaction `manager` so it commits atomically with the task row it
+   * records — a task without its matching history row (or the reverse) would
+   * be a corrupt audit trail.
    */
   async appendCreation(task: Task, manager: EntityManager): Promise<TaskStatusHistoryEntry> {
-    return await this.append(
+    return await this.insertOne(
       {
         taskId: task.id,
         fromStatus: null,
