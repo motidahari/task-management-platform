@@ -1,9 +1,7 @@
-import type { CursorPage } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
-import type { TaskStatusHistoryEntry } from '../domain/task-status-history.dao';
 import { Task } from '../domain/task.model';
 import { FieldValidatorService } from '../task-type/field-validator.service';
 import type { StatusDefinition } from '../task-type/interfaces/task-type-definition.interface';
@@ -14,6 +12,7 @@ import { TaskWriteDao } from './dao/task-write.dao';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { HistoryPageQueryDto } from './dto/history-page-query.dto';
+import type { HistoryPageDto } from './dto/history-page.dto';
 import { AssigneeNotFoundException } from './exception/assignee-not-found.exception';
 import { InvalidStatusTransitionException } from './exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from './exception/missing-required-fields.exception';
@@ -26,11 +25,6 @@ import { UnknownTaskTypeException } from './exception/unknown-task-type.exceptio
 const DEFAULT_HISTORY_PAGE_LIMIT = 20;
 /** A caller-requested `limit` above this is capped rather than rejected — an oversized ask is not a malformed one. */
 const MAX_HISTORY_PAGE_LIMIT = 100;
-
-/** One keyset page of a task's history, plus the `limit` actually applied — the transport layer echoes it back so a client always knows the page size it got. */
-export interface HistoryPage extends CursorPage<TaskStatusHistoryEntry> {
-  readonly limit: number;
-}
 
 /**
  * Single write funnel for the tasks domain. Every mutation opens its own
@@ -136,13 +130,23 @@ export class TaskService {
    * wrapped in a transaction — nothing here mutates, so there is nothing to
    * make atomic.
    */
-  async getHistoryPage(taskId: string, query: HistoryPageQueryDto): Promise<HistoryPage> {
+  async getHistoryPage(taskId: string, query: HistoryPageQueryDto): Promise<HistoryPageDto> {
     await this.taskDao.getById(taskId);
 
     const limit = this.resolveHistoryPageLimit(query.limit);
     const page = await this.taskStatusHistoryDao.findPageByTask(taskId, limit, query.cursor);
 
-    return { ...page, limit };
+    return {
+      items: page.items.map((entry) => ({
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        assignedUserId: entry.assignedUserId,
+        fieldsSnapshot: entry.fieldsSnapshot,
+        createdAt: entry.createdAt,
+      })),
+      nextCursor: page.nextCursor,
+      limit,
+    };
   }
 
   /** Absent defaults to {@link DEFAULT_HISTORY_PAGE_LIMIT}; anything past {@link MAX_HISTORY_PAGE_LIMIT} is capped, not rejected. */
