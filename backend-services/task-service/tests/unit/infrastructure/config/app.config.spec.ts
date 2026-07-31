@@ -48,6 +48,7 @@ describe('loadAppConfig', () => {
         redisUrl: 'redis://localhost:6379',
         corsOrigins: ['http://localhost:5173'],
         throttle: { ttlSec: 60, limit: 100 },
+        realtime: { maxConnections: 1000 },
       });
     });
 
@@ -120,6 +121,24 @@ describe('loadAppConfig', () => {
   describe('Given:REDIS_URL is missing, When:loading the environment', () => {
     it('should fail fast with a readable message', () => {
       expect(() => loadAppConfig(envWithout('REDIS_URL'))).toThrow(/REDIS_URL/);
+    });
+  });
+
+  describe('Given:REALTIME_MAX_CONNECTIONS is unset, When:loading the environment', () => {
+    it('should default the realtime connection cap to 1000', () => {
+      expect(loadAppConfig(VALID_ENV).realtime).toEqual({ maxConnections: 1000 });
+    });
+  });
+
+  describe('Given:REALTIME_MAX_CONNECTIONS is set, When:loading the environment', () => {
+    it('should use the configured cap', () => {
+      const config = loadAppConfig(envWith({ REALTIME_MAX_CONNECTIONS: '50' }));
+
+      expect(config.realtime).toEqual({ maxConnections: 50 });
+    });
+
+    it('should reject a non-numeric value', () => {
+      expect(() => loadAppConfig(envWith({ REALTIME_MAX_CONNECTIONS: 'lots' }))).toThrow();
     });
   });
 });
