@@ -1,0 +1,33 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.my-tasks-view {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-lg);
+}
+
+.my-tasks-view__toolbar {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+
+  @include mixins.respond(vars.$breakpoint-tablet) {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+.my-tasks-view__filter {
+  @include mixins.flx($gap: vars.$spacing-sm);
+}
+
+.my-tasks-view__panes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: vars.$spacing-lg;
+
+  @include mixins.respond(vars.$breakpoint-desktop) {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.my-tasks-view__empty-state {
+  color: var(--color-text-secondary);
+}

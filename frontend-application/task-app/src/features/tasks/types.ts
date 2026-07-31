@@ -53,3 +53,10 @@ export interface Task {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+/** A single seeded user resource, as returned by every user endpoint. */
+export interface User {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+}

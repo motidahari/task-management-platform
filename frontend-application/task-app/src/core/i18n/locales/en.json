@@ -38,6 +38,31 @@
     "switch-to-light-label": "Switch to light mode",
     "switch-to-dark-label": "Switch to dark mode"
   },
+  "task-card": {
+    "closed-badge": "Closed",
+    "assignee-label": "Assigned to {{userId}}"
+  },
+  "task-list": {
+    "empty-state": "No tasks yet.",
+    "load-more-button": "Load more"
+  },
+  "create-task-form": {
+    "title": "Create task",
+    "type-label": "Type",
+    "type-placeholder": "Select a type",
+    "assignee-label": "Assignee",
+    "assignee-placeholder": "Select a user",
+    "submit-button": "Create task",
+    "success-toast": "Task created."
+  },
+  "my-tasks-view": {
+    "user-picker-label": "Viewing tasks for",
+    "user-picker-placeholder": "Select a user",
+    "filter-label": "Status",
+    "filter-open": "Open",
+    "filter-closed": "Closed",
+    "select-user-prompt": "Select a user to see their tasks."
+  },
   "shared-errors": {
     "generic": "Something went wrong. Please try again.",
     "network": "We couldn't reach the server. Check your connection and try again.",
