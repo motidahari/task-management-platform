@@ -3,5 +3,29 @@
     "loading": "Loading task types…",
     "error-message": "We couldn't load task types. Please try again.",
     "retry-button": "Retry"
+  },
+  "app-layout": {
+    "title": "Task Management Platform"
+  },
+  "button": {
+    "loading-label": "Loading"
+  },
+  "text-field": {
+    "character-count": "{{current}}/{{max}}"
+  },
+  "modal": {
+    "close-button-label": "Close"
+  },
+  "toast": {
+    "dismiss-button-label": "Dismiss"
+  },
+  "spinner": {
+    "loading-label": "Loading"
+  },
+  "theme-toggle": {
+    "light-mode-label": "Light",
+    "dark-mode-label": "Dark",
+    "switch-to-light-label": "Switch to light mode",
+    "switch-to-dark-label": "Switch to dark mode"
   }
 }

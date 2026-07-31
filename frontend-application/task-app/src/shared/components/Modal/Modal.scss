@@ -1,0 +1,50 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.modal {
+  width: min(480px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: vars.$radius-md;
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+
+  &:focus {
+    outline: none;
+  }
+
+  &__backdrop {
+    @include mixins.flx($justify: center, $align: center);
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background-color: rgb(0 0 0 / 50%);
+  }
+
+  &__header {
+    @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
+    padding: vars.$spacing-md vars.$spacing-lg;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.125rem;
+    color: var(--color-text);
+  }
+
+  &__close {
+    min-width: 32px;
+    min-height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  &__body {
+    padding: vars.$spacing-lg;
+  }
+}
