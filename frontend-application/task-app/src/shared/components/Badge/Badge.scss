@@ -1,0 +1,33 @@
+@use '../../../styles/variables' as vars;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: vars.$spacing-xs vars.$spacing-sm;
+  border-radius: vars.$radius-sm;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text);
+
+  &--success {
+    background-color: var(--color-primary);
+    color: var(--color-bg);
+  }
+
+  &--warning {
+    background-color: var(--color-warning);
+    color: var(--color-bg);
+  }
+
+  &--danger {
+    background-color: var(--color-danger);
+    color: var(--color-bg);
+  }
+
+  &--info {
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+}
