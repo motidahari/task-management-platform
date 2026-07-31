@@ -6,6 +6,8 @@ import {
   ALL_TASK_TYPE_DEFINITIONS,
   type TaskTypeDefinition,
 } from './interfaces/task-type-definition.interface';
+import { TaskTypeQueryService } from './task-type-query.service';
+import { TaskTypeController } from './task-type.controller';
 import { TaskTypeRegistry } from './task-type.registry';
 
 const allTaskTypeDefinitionsProvider: Provider = {
@@ -26,7 +28,13 @@ const allTaskTypeDefinitionsProvider: Provider = {
  * can inject the aggregate without this module changing.
  */
 @Module({
-  providers: [...TASK_TYPE_DEFINITION_CLASSES, allTaskTypeDefinitionsProvider, TaskTypeRegistry],
+  controllers: [TaskTypeController],
+  providers: [
+    ...TASK_TYPE_DEFINITION_CLASSES,
+    allTaskTypeDefinitionsProvider,
+    TaskTypeRegistry,
+    TaskTypeQueryService,
+  ],
   exports: [ALL_TASK_TYPE_DEFINITIONS, TaskTypeRegistry],
 })
 export class TaskTypeModule {}
