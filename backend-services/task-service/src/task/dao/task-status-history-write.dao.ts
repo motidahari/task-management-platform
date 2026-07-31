@@ -61,4 +61,27 @@ export class TaskStatusHistoryWriteDao extends TaskStatusHistoryDao {
   ): Promise<TaskStatusHistoryEntry> {
     return await this.insertOne(entry, manager);
   }
+
+  /**
+   * Appends the immutable close entry for a task that just closed —
+   * `toStatus: null` marks the close transition, the mirror image of
+   * `appendCreation`'s `fromStatus: null` marking creation. Closing is not a
+   * status change, so there is no "next" assignee to record: the assignee is
+   * the task's own, read straight off the row rather than taken as a
+   * parameter. Must run inside the caller's transaction `manager` so it
+   * commits atomically with the task row it records — a task without its
+   * matching history row (or the reverse) would be a corrupt audit trail.
+   */
+  async appendClose(task: Task, manager: EntityManager): Promise<TaskStatusHistoryEntry> {
+    return await this.insertOne(
+      {
+        taskId: task.id,
+        fromStatus: task.status,
+        toStatus: null,
+        assignedUserId: task.assignedUserId,
+        fieldsSnapshot: {},
+      },
+      manager,
+    );
+  }
 }
