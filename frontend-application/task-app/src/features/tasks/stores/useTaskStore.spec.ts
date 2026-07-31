@@ -1,6 +1,7 @@
 import { ErrorCode } from '@core/shared/error-codes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { TaskEventPayload } from '../../../core/services/RealtimeService';
 import type { ApiError } from '../../../core/types/api-error';
 import { taskService } from '../services/taskService';
 import type { ChangeTaskStatusDto, CreateTaskDto, TaskListPage } from '../services/taskService.dto';
@@ -220,6 +221,7 @@ describe('useTaskStore', () => {
         items: [buildTask()],
         nextCursor: 'cursor-1',
         currentTask: buildTask(),
+        listUserId: 'u-1',
         error: validationError,
       });
 
@@ -229,8 +231,140 @@ describe('useTaskStore', () => {
         items: [],
         nextCursor: null,
         currentTask: null,
+        listUserId: null,
         isLoading: false,
         error: null,
+      });
+    });
+  });
+
+  describe('Given:applyTaskEvent receives a socket event', () => {
+    // `updatedAt` always mirrors the resource's own `updatedAt` — the server
+    // never sends the two out of sync — so deriving it from `task` here
+    // keeps every case below from having to keep two timestamps in step.
+    function buildEventPayload(task: Task): TaskEventPayload {
+      return { task, updatedAt: task.updatedAt };
+    }
+
+    describe('When:the task is not known to the store yet', () => {
+      it('should upsert it into the list when it belongs to the currently loaded list', () => {
+        useTaskStore.setState({ items: [], listUserId: 'u-1' });
+        const payload = buildEventPayload(buildTask({ assignedUserId: 'u-1' }));
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([payload.task]);
+      });
+
+      it('should not add it to the list when it is assigned to a different user than the loaded list', () => {
+        useTaskStore.setState({ items: [], listUserId: 'u-1' });
+        const payload = buildEventPayload(buildTask({ assignedUserId: 'u-2' }));
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([]);
+      });
+
+      it('should update currentTask when it matches the viewed task, regardless of the loaded list', () => {
+        useTaskStore.setState({ currentTask: buildTask(), listUserId: null });
+        const payload = buildEventPayload(
+          buildTask({
+            status: 2,
+            statusName: 'in-progress',
+            updatedAt: '2026-01-01T00:00:01.000000Z',
+          }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().currentTask).toEqual(payload.task);
+      });
+    });
+
+    describe('When:the event reassigns a task away from the currently loaded list', () => {
+      it('should drop it from items', () => {
+        const existing = buildTask({
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        useTaskStore.setState({ items: [existing], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({ assignedUserId: 'u-2', updatedAt: '2026-01-01T00:00:01.000000Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([]);
+      });
+    });
+
+    describe('When:the payload’s updatedAt is older than the known task’s', () => {
+      it('should ignore the event', () => {
+        const known = buildTask({ status: 2, updatedAt: '2026-01-01T00:00:02.000000Z' });
+        useTaskStore.setState({ items: [known], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({ status: 3, updatedAt: '2026-01-01T00:00:01.000000Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([known]);
+      });
+    });
+
+    describe('When:the payload’s updatedAt exactly equals the known task’s', () => {
+      it('should ignore the event', () => {
+        const known = buildTask({ status: 2, updatedAt: '2026-01-01T00:00:02.000000Z' });
+        useTaskStore.setState({ items: [known], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({ status: 3, updatedAt: '2026-01-01T00:00:02.000000Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([known]);
+      });
+    });
+
+    describe('When:the payload’s updatedAt is newer than the known task’s', () => {
+      it('should apply the event', () => {
+        const known = buildTask({ status: 2, updatedAt: '2026-01-01T00:00:02.000000Z' });
+        useTaskStore.setState({ items: [known], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({ status: 3, updatedAt: '2026-01-01T00:00:03.000000Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([payload.task]);
+      });
+    });
+
+    describe('When:two updates land in the same millisecond but different microseconds', () => {
+      it('should apply the microsecond-newer update instead of tying on the millisecond-truncated value', () => {
+        const known = buildTask({ status: 2, updatedAt: '2026-01-01T00:00:00.123456Z' });
+        useTaskStore.setState({ items: [known], listUserId: 'u-1' });
+        // Both timestamps round to the same ".123Z" if truncated to milliseconds —
+        // only the full microsecond string tells them apart.
+        const payload = buildEventPayload(
+          buildTask({ status: 3, updatedAt: '2026-01-01T00:00:00.123457Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([payload.task]);
+      });
+
+      it('should ignore a microsecond-older update within the same millisecond', () => {
+        const known = buildTask({ status: 2, updatedAt: '2026-01-01T00:00:00.123457Z' });
+        useTaskStore.setState({ items: [known], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({ status: 3, updatedAt: '2026-01-01T00:00:00.123456Z' }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([known]);
       });
     });
   });
