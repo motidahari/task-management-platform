@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskEventPayload } from '../../../core/services/RealtimeService';
 import type { ApiError } from '../../../core/types/api-error';
 import { taskService } from '../services/taskService';
-import type { ChangeTaskStatusDto, CreateTaskDto, TaskListPage } from '../services/taskService.dto';
+import type {
+  ChangeTaskStatusDto,
+  CreateTaskDto,
+  TaskHistoryPage,
+  TaskListPage,
+} from '../services/taskService.dto';
 import type { Task } from '../types';
 import { useTaskStore } from './useTaskStore';
 
@@ -22,6 +27,7 @@ const getTaskMock = vi.spyOn(taskService, 'getTask');
 const createTaskMock = vi.spyOn(taskService, 'createTask');
 const changeTaskStatusMock = vi.spyOn(taskService, 'changeTaskStatus');
 const closeTaskMock = vi.spyOn(taskService, 'closeTask');
+const getTaskHistoryMock = vi.spyOn(taskService, 'getTaskHistory');
 
 function buildTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -215,6 +221,82 @@ describe('useTaskStore', () => {
     });
   });
 
+  describe('Given:fetching the first page of a task’s history succeeds', () => {
+    it('should replace historyItems and store the next cursor', async () => {
+      const page: TaskHistoryPage = {
+        items: [
+          {
+            fromStatus: null,
+            toStatus: 1,
+            assignedUserId: 'u-1',
+            fieldsSnapshot: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        nextCursor: 'cursor-1',
+        limit: 20,
+      };
+      getTaskHistoryMock.mockResolvedValueOnce(page);
+
+      const result = await useTaskStore.getState().fetchTaskHistory('t-1');
+
+      expect(result).toBe(true);
+      expect(getTaskHistoryMock).toHaveBeenCalledWith('t-1', undefined);
+      expect(useTaskStore.getState()).toMatchObject({
+        historyItems: page.items,
+        historyNextCursor: 'cursor-1',
+        isLoading: false,
+        error: null,
+      });
+    });
+  });
+
+  describe('Given:fetching a subsequent page of a task’s history with a cursor', () => {
+    it('should append the new entries to the existing history', async () => {
+      const firstEntry = {
+        fromStatus: null,
+        toStatus: 1,
+        assignedUserId: 'u-1',
+        fieldsSnapshot: {},
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
+      const secondEntry = {
+        fromStatus: 1,
+        toStatus: 2,
+        assignedUserId: 'u-2',
+        fieldsSnapshot: {},
+        createdAt: '2026-01-02T00:00:00.000Z',
+      };
+      useTaskStore.setState({ historyItems: [firstEntry], historyNextCursor: 'cursor-1' });
+      getTaskHistoryMock.mockResolvedValueOnce({
+        items: [secondEntry],
+        nextCursor: null,
+        limit: 20,
+      });
+
+      const result = await useTaskStore.getState().fetchTaskHistory('t-1', { cursor: 'cursor-1' });
+
+      expect(result).toBe(true);
+      expect(useTaskStore.getState().historyItems).toEqual([firstEntry, secondEntry]);
+      expect(useTaskStore.getState().historyNextCursor).toBeNull();
+    });
+  });
+
+  describe('Given:fetching a task’s history fails', () => {
+    it('should set the error and emit an error toast', async () => {
+      getTaskHistoryMock.mockRejectedValueOnce(validationError);
+
+      const result = await useTaskStore.getState().fetchTaskHistory('t-1');
+
+      expect(result).toBe(false);
+      expect(useTaskStore.getState().error).toEqual(validationError);
+      expect(emitMock).toHaveBeenCalledWith('toast:show', {
+        kind: 'error',
+        text: 'shared-errors.invalid-details',
+      });
+    });
+  });
+
   describe('Given:reset is called after the store accumulated state', () => {
     it('should restore every field to its initial value while keeping the actions callable', () => {
       useTaskStore.setState({
@@ -222,6 +304,16 @@ describe('useTaskStore', () => {
         nextCursor: 'cursor-1',
         currentTask: buildTask(),
         listUserId: 'u-1',
+        historyItems: [
+          {
+            fromStatus: null,
+            toStatus: 1,
+            assignedUserId: 'u-1',
+            fieldsSnapshot: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        historyNextCursor: 'cursor-1',
         error: validationError,
       });
 
@@ -232,6 +324,8 @@ describe('useTaskStore', () => {
         nextCursor: null,
         currentTask: null,
         listUserId: null,
+        historyItems: [],
+        historyNextCursor: null,
         isLoading: false,
         error: null,
       });

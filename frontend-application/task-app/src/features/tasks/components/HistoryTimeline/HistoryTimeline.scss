@@ -1,0 +1,46 @@
+@use '../../../../styles/variables' as vars;
+@use '../../../../styles/mixins';
+
+.history-timeline {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+
+  &__list {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-sm);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__entry {
+    padding: vars.$spacing-sm vars.$spacing-md;
+    border-inline-start: 2px solid var(--color-border);
+  }
+
+  &__transition {
+    margin: 0;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  &__meta {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
+
+  &__fields {
+    margin: vars.$spacing-xs 0 0;
+    padding-inline-start: vars.$spacing-md;
+    color: var(--color-text-secondary);
+  }
+
+  &__timestamp {
+    display: block;
+    margin-top: vars.$spacing-xs;
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+  }
+
+  &__empty {
+    color: var(--color-text-secondary);
+  }
+}

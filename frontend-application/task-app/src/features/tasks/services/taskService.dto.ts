@@ -27,3 +27,27 @@ export interface ChangeTaskStatusDto {
   readonly nextAssignedUserId: string;
   readonly customFields?: Readonly<Record<string, unknown>>;
 }
+
+export interface TaskHistoryParams {
+  readonly limit?: number;
+  readonly cursor?: string;
+}
+
+/**
+ * One recorded transition. `fromStatus: null` marks the task's creation row;
+ * `toStatus: null` marks its close — every other row is a status change, with
+ * the assignee and the fields submitted for that transition frozen in place.
+ */
+export interface TaskHistoryEntry {
+  readonly fromStatus: number | null;
+  readonly toStatus: number | null;
+  readonly assignedUserId: string;
+  readonly fieldsSnapshot: Readonly<Record<string, unknown>>;
+  readonly createdAt: string;
+}
+
+export type TaskHistoryPage = Readonly<{
+  items: readonly TaskHistoryEntry[];
+  nextCursor: string | null;
+  limit: number;
+}>;

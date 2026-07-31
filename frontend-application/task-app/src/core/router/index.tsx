@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router';
 
 import { TaskTypesGate } from '../../features/tasks/components/TaskTypesGate';
 import { MyTasksView } from '../../features/tasks/views/MyTasksView';
+import { TaskDetailView } from '../../features/tasks/views/TaskDetailView';
 import { AppLayout } from '../../layouts/AppLayout';
 
 /**
@@ -17,6 +18,9 @@ export const router = createBrowserRouter([
         <AppLayout />
       </TaskTypesGate>
     ),
-    children: [{ index: true, element: <MyTasksView /> }],
+    children: [
+      { index: true, element: <MyTasksView /> },
+      { path: 'tasks/:taskId', element: <TaskDetailView /> },
+    ],
   },
 ]);
