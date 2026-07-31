@@ -42,4 +42,23 @@ export class TaskStatusHistoryWriteDao extends TaskStatusHistoryDao {
       manager,
     );
   }
+
+  /**
+   * Appends a transition between two statuses a task already has — as
+   * opposed to `appendCreation`'s from-nothing row. Must run inside the
+   * caller's transaction `manager` for the same reason: a status change
+   * without its history row (or the reverse) would be a corrupt audit trail.
+   */
+  async append(
+    entry: {
+      taskId: string;
+      fromStatus: number;
+      toStatus: number;
+      assignedUserId: string;
+      fieldsSnapshot: Record<string, unknown>;
+    },
+    manager: EntityManager,
+  ): Promise<TaskStatusHistoryEntry> {
+    return await this.insertOne(entry, manager);
+  }
 }

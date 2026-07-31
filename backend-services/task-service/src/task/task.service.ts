@@ -3,12 +3,19 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
 import { Task } from '../domain/task.model';
+import { FieldValidatorService } from '../task-type/field-validator.service';
+import type { StatusDefinition } from '../task-type/interfaces/task-type-definition.interface';
 import { TaskTypeRegistry } from '../task-type/task-type.registry';
 import { AssigneeExistenceDao } from './dao/assignee-existence.dao';
 import { TaskStatusHistoryWriteDao } from './dao/task-status-history-write.dao';
 import { TaskWriteDao } from './dao/task-write.dao';
+import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { AssigneeNotFoundException } from './exception/assignee-not-found.exception';
+import { InvalidStatusTransitionException } from './exception/invalid-status-transition.exception';
+import { MissingRequiredFieldsException } from './exception/missing-required-fields.exception';
+import { TaskClosedException } from './exception/task-closed.exception';
+import { TaskStateConflictException } from './exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from './exception/unknown-task-type.exception';
 
 /**
@@ -17,7 +24,10 @@ import { UnknownTaskTypeException } from './exception/unknown-task-type.exceptio
  * (the task and its creation history entry) that must commit together, or
  * neither survives. Nothing is locked, since the row does not exist until
  * this call creates it; the transaction buys atomicity between the two
- * inserts, not serialization against a concurrent writer.
+ * inserts, not serialization against a concurrent writer. `changeStatus`
+ * additionally takes a pessimistic write lock on the task row, so a
+ * concurrent change on the same task serializes behind it instead of
+ * racing it.
  */
 @Injectable()
 export class TaskService {
@@ -27,6 +37,7 @@ export class TaskService {
     private readonly taskStatusHistoryDao: TaskStatusHistoryWriteDao,
     private readonly assigneeExistenceDao: AssigneeExistenceDao,
     private readonly taskTypeRegistry: TaskTypeRegistry,
+    private readonly fieldValidator: FieldValidatorService,
   ) {}
 
   async createTask(dto: CreateTaskDto): Promise<Task> {
@@ -48,5 +59,116 @@ export class TaskService {
 
       return task;
     });
+  }
+
+  /**
+   * `expectedStatus` is checked before any transition arithmetic — a stale
+   * or duplicate submit gets a deterministic `409` before the request's
+   * direction or fields are even considered, rather than a confusing
+   * outcome that depends on how far the arithmetic got first.
+   */
+  async changeStatus(taskId: string, dto: ChangeStatusDto): Promise<Task> {
+    return this.dataSource.transaction(async (manager) => {
+      const task = await this.taskDao.getByIdForUpdate(taskId, manager);
+
+      if (task.isClosed) {
+        throw new TaskClosedException();
+      }
+
+      if (task.status !== dto.expectedStatus) {
+        throw new TaskStateConflictException(task.status);
+      }
+
+      const targetStatus = this.resolveTargetStatus(task, dto.direction);
+      const sanitizedFields =
+        dto.direction === 'forward'
+          ? this.validateForwardFields(task.type, targetStatus, dto.customFields ?? {})
+          : {};
+
+      if (!(await this.assigneeExistenceDao.existsById(dto.nextAssignedUserId, manager))) {
+        throw new AssigneeNotFoundException(dto.nextAssignedUserId);
+      }
+
+      const customFields =
+        dto.direction === 'forward'
+          ? { ...task.customFields, ...sanitizedFields }
+          : task.customFields;
+
+      const updatedTask = await this.taskDao.update(
+        taskId,
+        { status: targetStatus, assignedUserId: dto.nextAssignedUserId, customFields },
+        manager,
+      );
+
+      await this.taskStatusHistoryDao.append(
+        {
+          taskId: updatedTask.id,
+          fromStatus: task.status,
+          toStatus: targetStatus,
+          assignedUserId: updatedTask.assignedUserId,
+          fieldsSnapshot: sanitizedFields,
+        },
+        manager,
+      );
+
+      return updatedTask;
+    });
+  }
+
+  /**
+   * Forward is `status + 1`, backward `status - 1` — one step at a time by
+   * construction, so neither direction can skip a status. Past the type's
+   * final status, or below status 1, is the same business error regardless
+   * of which bound was crossed.
+   */
+  private resolveTargetStatus(task: Task, direction: ChangeStatusDto['direction']): number {
+    const targetStatus = direction === 'forward' ? task.status + 1 : task.status - 1;
+    const finalStatus = this.taskTypeRegistry.finalStatusOf(task.type);
+
+    if (targetStatus < 1 || targetStatus > finalStatus) {
+      throw new InvalidStatusTransitionException();
+    }
+
+    return targetStatus;
+  }
+
+  /**
+   * Only a forward move validates and sanitizes `customFields` — a backward
+   * move re-enters a status the task already satisfied once, so there is
+   * nothing new to prove.
+   */
+  private validateForwardFields(
+    type: string,
+    targetStatus: number,
+    customFields: Record<string, unknown>,
+  ): Record<string, string | number> {
+    const statusDefinition = this.statusDefinitionOf(type, targetStatus);
+    const result = this.fieldValidator.validate(customFields, statusDefinition);
+
+    if (!result.valid) {
+      throw new MissingRequiredFieldsException(targetStatus, [
+        ...result.missing,
+        ...Object.keys(result.invalid),
+      ]);
+    }
+
+    return result.sanitizedFields;
+  }
+
+  /**
+   * A persisted task's `type` and status range were already proven
+   * registered when `resolveTargetStatus` derived `finalStatusOf` for it —
+   * a missing definition or status here is a registry inconsistency, not a
+   * client-facing error.
+   */
+  private statusDefinitionOf(type: string, status: number): StatusDefinition {
+    const definition = this.taskTypeRegistry.findByType(type);
+    const statusDefinition = definition?.statuses.find((candidate) => candidate.status === status);
+
+    if (!statusDefinition) {
+      throw new Error(`Task type "${type}" has no status definition for status ${status}.`);
+    }
+
+    return statusDefinition;
   }
 }

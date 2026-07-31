@@ -2,6 +2,7 @@ import type { Provider } from '@nestjs/common';
 import { Module } from '@nestjs/common';
 
 import { TASK_TYPE_DEFINITION_CLASSES } from './definitions';
+import { FieldValidatorService } from './field-validator.service';
 import {
   ALL_TASK_TYPE_DEFINITIONS,
   type TaskTypeDefinition,
@@ -25,7 +26,11 @@ const allTaskTypeDefinitionsProvider: Provider = {
  * there is only one list.
  *
  * `ALL_TASK_TYPE_DEFINITIONS` is exported by token so a downstream registry
- * can inject the aggregate without this module changing.
+ * can inject the aggregate without this module changing. `FieldValidatorService`
+ * is exported alongside the registry — it has no dependencies of its own, but
+ * validating `customFields` against a status definition is a task-type concern,
+ * so it lives and is wired here rather than in whichever module happens to
+ * consume it first.
  */
 @Module({
   controllers: [TaskTypeController],
@@ -34,7 +39,8 @@ const allTaskTypeDefinitionsProvider: Provider = {
     allTaskTypeDefinitionsProvider,
     TaskTypeRegistry,
     TaskTypeQueryService,
+    FieldValidatorService,
   ],
-  exports: [ALL_TASK_TYPE_DEFINITIONS, TaskTypeRegistry],
+  exports: [ALL_TASK_TYPE_DEFINITIONS, TaskTypeRegistry, FieldValidatorService],
 })
 export class TaskTypeModule {}
