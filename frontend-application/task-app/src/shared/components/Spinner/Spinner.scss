@@ -1,0 +1,30 @@
+@use '../../../styles/variables' as vars;
+
+.spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  animation: spinner-rotate 0.8s linear infinite;
+
+  &--sm {
+    width: vars.$spacing-md;
+    height: vars.$spacing-md;
+  }
+
+  &--md {
+    width: vars.$spacing-lg;
+    height: vars.$spacing-lg;
+  }
+
+  &--lg {
+    width: vars.$spacing-xl;
+    height: vars.$spacing-xl;
+  }
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
