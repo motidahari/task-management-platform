@@ -3,6 +3,11 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 
 import { Task } from '../domain/task.model';
+import {
+  TaskEventsPublisher,
+  type TaskEventName,
+  type TaskEventPayload,
+} from '../realtime/task-events.publisher';
 import { FieldValidatorService } from '../task-type/field-validator.service';
 import type { StatusDefinition } from '../task-type/interfaces/task-type-definition.interface';
 import { TaskTypeRegistry } from '../task-type/task-type.registry';
@@ -49,10 +54,11 @@ export class TaskService {
     private readonly assigneeExistenceDao: AssigneeExistenceDao,
     private readonly taskTypeRegistry: TaskTypeRegistry,
     private readonly fieldValidator: FieldValidatorService,
+    private readonly taskEventsPublisher: TaskEventsPublisher,
   ) {}
 
   async createTask(dto: CreateTaskDto): Promise<Task> {
-    return this.dataSource.transaction(async (manager) => {
+    const task = await this.dataSource.transaction(async (manager) => {
       if (!this.taskTypeRegistry.findByType(dto.type)) {
         throw new UnknownTaskTypeException(dto.type);
       }
@@ -61,15 +67,19 @@ export class TaskService {
         throw new AssigneeNotFoundException(dto.assignedUserId);
       }
 
-      const task = await this.taskDao.create(
+      const insertedTask = await this.taskDao.create(
         { type: dto.type, assignedUserId: dto.assignedUserId },
         manager,
       );
 
-      await this.taskStatusHistoryDao.appendCreation(task, manager);
+      await this.taskStatusHistoryDao.appendCreation(insertedTask, manager);
 
-      return task;
+      return insertedTask;
     });
+
+    this.publishTaskEvent('task:created', task);
+
+    return task;
   }
 
   /**
@@ -79,8 +89,12 @@ export class TaskService {
    * outcome that depends on how far the arithmetic got first.
    */
   async changeStatus(taskId: string, dto: ChangeStatusDto): Promise<Task> {
-    return this.dataSource.transaction(async (manager) => {
+    let previousAssigneeId: string | undefined;
+
+    const updatedTask = await this.dataSource.transaction(async (manager) => {
       const task = await this.taskDao.getByIdForUpdate(taskId, manager);
+
+      previousAssigneeId = task.assignedUserId;
 
       if (task.isClosed) {
         throw new TaskClosedException();
@@ -105,7 +119,7 @@ export class TaskService {
           ? { ...task.customFields, ...sanitizedFields }
           : task.customFields;
 
-      const updatedTask = await this.taskDao.update(
+      const updated = await this.taskDao.update(
         taskId,
         { status: targetStatus, assignedUserId: dto.nextAssignedUserId, customFields },
         manager,
@@ -113,17 +127,23 @@ export class TaskService {
 
       await this.taskStatusHistoryDao.append(
         {
-          taskId: updatedTask.id,
+          taskId: updated.id,
           fromStatus: task.status,
           toStatus: targetStatus,
-          assignedUserId: updatedTask.assignedUserId,
+          assignedUserId: updated.assignedUserId,
           fieldsSnapshot: sanitizedFields,
         },
         manager,
       );
 
-      return updatedTask;
+      return updated;
     });
+
+    const reassigned = previousAssigneeId !== updatedTask.assignedUserId;
+
+    this.publishTaskEvent('task:updated', updatedTask, reassigned ? previousAssigneeId : undefined);
+
+    return updatedTask;
   }
 
   /**
@@ -201,7 +221,7 @@ export class TaskService {
    * exceptions, which describe a status move this isn't.
    */
   async closeTask(taskId: string): Promise<Task> {
-    return this.dataSource.transaction(async (manager) => {
+    const closedTask = await this.dataSource.transaction(async (manager) => {
       const task = await this.taskDao.getByIdForUpdate(taskId, manager);
 
       if (task.isClosed) {
@@ -212,12 +232,39 @@ export class TaskService {
         throw new TaskNotAtFinalStatusException();
       }
 
-      const closedTask = await this.taskDao.close(taskId, manager);
+      const closed = await this.taskDao.close(taskId, manager);
 
-      await this.taskStatusHistoryDao.appendClose(closedTask, manager);
+      await this.taskStatusHistoryDao.appendClose(closed, manager);
 
-      return closedTask;
+      return closed;
     });
+
+    this.publishTaskEvent('task:closed', closedTask);
+
+    return closedTask;
+  }
+
+  /**
+   * The single call site every mutation reaches after its own transaction has
+   * resolved — never from inside a `transaction()` callback, so a mutation
+   * that throws (and therefore rolls back) can never reach this line. Builds
+   * the event payload from the exact same wire shape and `updatedAt`
+   * serializer the REST response uses, so a socket event and the HTTP
+   * response for the same mutation are never out of sync.
+   */
+  private publishTaskEvent(event: TaskEventName, task: Task, previousAssigneeId?: string): void {
+    const statusName = this.taskTypeRegistry.statusNameOf(task.type, task.status);
+    const resource = toTaskResponse(task, statusName);
+    // Spread onto a fresh object rather than passing `resource` directly:
+    // `TaskResponseDto` has no index signature of its own, and the
+    // publisher's `TaskEventResource` port type declares one — the spread
+    // satisfies that without asserting past the type checker.
+    const payload: TaskEventPayload = {
+      task: { ...resource },
+      updatedAt: resource.updatedAt,
+    };
+
+    this.taskEventsPublisher.publish(event, payload, previousAssigneeId);
   }
 
   /**
