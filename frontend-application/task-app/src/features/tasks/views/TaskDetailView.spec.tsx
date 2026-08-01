@@ -136,14 +136,13 @@ describe('TaskDetailView', () => {
       fireEvent.click(await screen.findByTestId('advance-button'));
 
       expect(screen.getByTestId('dynamic-fields-form')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
       await waitFor(() => expect(screen.getByRole('option', { name: 'u-2' })).toBeInTheDocument());
 
       fireEvent.change(screen.getByLabelText('Branch name'), {
         target: { value: 'feature/login' },
       });
-      fireEvent.change(screen.getByLabelText('assignee-select.label'), {
-        target: { value: 'u-2' },
-      });
+      fireEvent.click(screen.getByRole('option', { name: 'u-2' }));
       fireEvent.click(screen.getByTestId('advance-submit'));
 
       await waitFor(() =>
@@ -193,9 +192,8 @@ describe('TaskDetailView', () => {
       renderTaskDetailView();
       fireEvent.click(await screen.findByTestId('advance-button'));
       fireEvent.change(screen.getByLabelText('Branch name'), { target: { value: 'x' } });
-      fireEvent.change(screen.getByLabelText('assignee-select.label'), {
-        target: { value: 'u-1' },
-      });
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
+      fireEvent.click(screen.getByRole('option', { name: 'u-1' }));
       fireEvent.click(screen.getByTestId('advance-submit'));
 
       await waitFor(() =>
