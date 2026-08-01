@@ -17,8 +17,9 @@ npm run typecheck  # tsc per workspace
 npm run build      # build every workspace
 npm run format     # prettier --write .
 
-npm run storybook -w frontend-application/task-app        # design-system catalogue on :6006
-npm run build-storybook -w frontend-application/task-app  # static catalogue into storybook-static/
+npm run storybook          # design-system catalogue with hot reload on :6006
+npm run storybook:build    # static catalogue into task-app/storybook-static/
+npm run storybook:preview  # build the static catalogue, then serve it on :6007
 ```
 
 Storybook covers `src/shared/components/**` only — feature components are store- and router-wired

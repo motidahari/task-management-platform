@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "preview-storybook": "vite preview --outDir storybook-static --port 6007"
   },
   "dependencies": {
     "@core/shared": "^0.1.0",
