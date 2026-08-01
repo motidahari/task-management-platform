@@ -3,6 +3,7 @@ import { ValidationException } from '@core/shared';
 import { Task, TaskProps } from '../../../src/domain/task.model';
 
 const REFERENCE_DATE = new Date('2026-07-30T12:00:00Z');
+const REFERENCE_UPDATED_AT = '2026-07-30T12:00:00.000000Z';
 
 function validProps(overrides: Partial<TaskProps> = {}): TaskProps {
   return {
@@ -13,7 +14,7 @@ function validProps(overrides: Partial<TaskProps> = {}): TaskProps {
     assignedUserId: 'user-1',
     customFields: {},
     createdAt: REFERENCE_DATE,
-    updatedAt: REFERENCE_DATE,
+    updatedAt: REFERENCE_UPDATED_AT,
     ...overrides,
   };
 }
@@ -30,7 +31,7 @@ describe('Task', () => {
       expect(task.assignedUserId).toBe('user-1');
       expect(task.customFields).toEqual({});
       expect(task.createdAt).toBe(REFERENCE_DATE);
-      expect(task.updatedAt).toBe(REFERENCE_DATE);
+      expect(task.updatedAt).toBe(REFERENCE_UPDATED_AT);
     });
   });
 
@@ -118,11 +119,9 @@ describe('Task', () => {
     });
   });
 
-  describe('Given:an invalid Date updatedAt, When:constructing', () => {
+  describe('Given:an empty updatedAt, When:constructing', () => {
     it('should throw ValidationException', () => {
-      expect(() => new Task(validProps({ updatedAt: new Date('not-a-date') }))).toThrow(
-        ValidationException,
-      );
+      expect(() => new Task(validProps({ updatedAt: '' }))).toThrow(ValidationException);
     });
   });
 
@@ -173,7 +172,7 @@ describe('Task', () => {
         assignedUserId: 'user-1',
         customFields: { quote1: '100 USD' },
         createdAt: REFERENCE_DATE,
-        updatedAt: REFERENCE_DATE,
+        updatedAt: REFERENCE_UPDATED_AT,
       });
     });
   });
