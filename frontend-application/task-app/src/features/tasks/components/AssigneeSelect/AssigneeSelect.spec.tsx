@@ -22,6 +22,8 @@ describe('AssigneeSelect', () => {
     it('should render every option', () => {
       render(<AssigneeSelect value="u-1" options={options} onChange={vi.fn()} />);
 
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
+
       expect(screen.getByRole('option', { name: 'u-1' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'u-2' })).toBeInTheDocument();
     });
@@ -32,9 +34,8 @@ describe('AssigneeSelect', () => {
       const onChange = vi.fn();
       render(<AssigneeSelect value="u-1" options={options} onChange={onChange} />);
 
-      fireEvent.change(screen.getByLabelText('assignee-select.label'), {
-        target: { value: 'u-2' },
-      });
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
+      fireEvent.click(screen.getByRole('option', { name: 'u-2' }));
 
       expect(onChange).toHaveBeenCalledWith('u-2');
     });
