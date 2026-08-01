@@ -23,7 +23,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The only `<select>` in the app — `UserSelect`/task-type pickers compose this instead of a raw element.',
+          'The only dropdown in the app — `UserSelect`/task-type pickers compose this instead of a raw `<select>`. It renders its own listbox anchored below the trigger, following the ARIA combobox pattern: focus stays on the trigger button and the active option is tracked with `aria-activedescendant`.',
       },
     },
   },
