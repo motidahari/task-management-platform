@@ -36,6 +36,8 @@ describe('UserSelect', () => {
     it('should render one option per user, keyed by id and labeled by name', () => {
       renderUserSelect();
 
+      fireEvent.click(screen.getByLabelText('Assignee'));
+
       expect(screen.getByRole('option', { name: 'Alice' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Bob' })).toBeInTheDocument();
     });
@@ -45,7 +47,8 @@ describe('UserSelect', () => {
     it('should call onChange with the selected user id', () => {
       renderUserSelect({ value: 'u-1' });
 
-      fireEvent.change(screen.getByLabelText('Assignee'), { target: { value: 'u-2' } });
+      fireEvent.click(screen.getByLabelText('Assignee'));
+      fireEvent.click(screen.getByRole('option', { name: 'Bob' }));
 
       expect(onChange).toHaveBeenCalledWith('u-2');
     });
@@ -54,6 +57,8 @@ describe('UserSelect', () => {
   describe('Given:a placeholder prop', () => {
     it('should render it as the unselectable first option', () => {
       renderUserSelect({ placeholder: 'Select a user' });
+
+      fireEvent.click(screen.getByLabelText('Assignee'));
 
       expect(screen.getByRole('option', { name: 'Select a user' })).toBeInTheDocument();
     });

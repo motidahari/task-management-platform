@@ -82,6 +82,13 @@ describe('CreateTaskForm', () => {
     );
   }
 
+  function pickTypeAndAssignee(): void {
+    fireEvent.click(screen.getByLabelText('create-task-form.type-label'));
+    fireEvent.click(screen.getByRole('option', { name: 'Development' }));
+    fireEvent.click(screen.getByLabelText('create-task-form.assignee-label'));
+    fireEvent.click(screen.getByRole('option', { name: 'Alice' }));
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
     createTask = vi.fn();
@@ -100,12 +107,7 @@ describe('CreateTaskForm', () => {
     it('should enable the submit button', () => {
       render(<CreateTaskForm />);
 
-      fireEvent.change(screen.getByLabelText('create-task-form.type-label'), {
-        target: { value: 'development' },
-      });
-      fireEvent.change(screen.getByLabelText('create-task-form.assignee-label'), {
-        target: { value: 'u-1' },
-      });
+      pickTypeAndAssignee();
 
       expect(screen.getByTestId('create-task-form-submit')).toBeEnabled();
     });
@@ -116,12 +118,7 @@ describe('CreateTaskForm', () => {
       createTask.mockResolvedValueOnce(true);
       render(<CreateTaskForm />);
 
-      fireEvent.change(screen.getByLabelText('create-task-form.type-label'), {
-        target: { value: 'development' },
-      });
-      fireEvent.change(screen.getByLabelText('create-task-form.assignee-label'), {
-        target: { value: 'u-1' },
-      });
+      pickTypeAndAssignee();
       fireEvent.click(screen.getByTestId('create-task-form-submit'));
 
       await vi.waitFor(() =>
@@ -131,7 +128,9 @@ describe('CreateTaskForm', () => {
         expect(toastSuccessMock).toHaveBeenCalledWith('create-task-form.success-toast'),
       );
       await vi.waitFor(() =>
-        expect(screen.getByLabelText('create-task-form.type-label')).toHaveValue(''),
+        expect(screen.getByLabelText('create-task-form.type-label')).toHaveTextContent(
+          'create-task-form.type-placeholder',
+        ),
       );
     });
   });
@@ -141,17 +140,12 @@ describe('CreateTaskForm', () => {
       createTask.mockResolvedValueOnce(false);
       render(<CreateTaskForm />);
 
-      fireEvent.change(screen.getByLabelText('create-task-form.type-label'), {
-        target: { value: 'development' },
-      });
-      fireEvent.change(screen.getByLabelText('create-task-form.assignee-label'), {
-        target: { value: 'u-1' },
-      });
+      pickTypeAndAssignee();
       fireEvent.click(screen.getByTestId('create-task-form-submit'));
 
       await vi.waitFor(() => expect(createTask).toHaveBeenCalledTimes(1));
       expect(toastSuccessMock).not.toHaveBeenCalled();
-      expect(screen.getByLabelText('create-task-form.type-label')).toHaveValue('development');
+      expect(screen.getByLabelText('create-task-form.type-label')).toHaveTextContent('Development');
     });
   });
 });
