@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 import rootConfig from '../../eslint.config.mjs';
 
 export default tseslint.config(...rootConfig, {
-  files: ['src/**/*.{ts,tsx}'],
+  files: ['src/**/*.{ts,tsx}', '.storybook/**/*.{ts,tsx}'],
   languageOptions: {
     parserOptions: {
       projectService: true,

@@ -16,7 +16,14 @@ npm run lint       # eslint per workspace + prettier --check .   <-- prettier is
 npm run typecheck  # tsc per workspace
 npm run build      # build every workspace
 npm run format     # prettier --write .
+
+npm run storybook -w frontend-application/task-app        # design-system catalogue on :6006
+npm run build-storybook -w frontend-application/task-app  # static catalogue into storybook-static/
 ```
+
+Storybook covers `src/shared/components/**` only — feature components are store- and router-wired
+and are documented by their specs instead. Global styles, i18n and the `data-theme` switcher are
+installed once in `.storybook/preview.tsx`; a story never wraps itself in those providers.
 
 **Green gate before any push:** `npm test`, `npm run lint`, `npm run build`, `npm run typecheck` — all from the root. Workspace-level eslint alone misses the root `prettier --check .`, and CI fails on it.
 
