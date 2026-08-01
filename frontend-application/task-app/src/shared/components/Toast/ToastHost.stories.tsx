@@ -27,7 +27,11 @@ const meta = {
   component: ToastHost,
   tags: ['autodocs'],
   parameters: {
+    // The stack is pinned to the viewport corner, so it only lands where a
+    // reader expects it when the story owns the whole frame.
+    layout: 'fullscreen',
     docs: {
+      story: { inline: false, height: '260px' },
       description: {
         component:
           'Global, layout-level toast stack — mounted exactly once by `AppLayout`. Every feature reaches it only through the `toast:show` bus event (the `useToast` sugar, or a direct emit for pre-resolved error text); nothing ever renders a `Toast` itself. Copy travels either as a translation key (resolved here) or as already-resolved text.',

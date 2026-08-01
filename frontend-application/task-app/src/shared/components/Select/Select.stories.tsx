@@ -20,7 +20,11 @@ const meta = {
   component: Select,
   tags: ['autodocs'],
   parameters: {
+    // The open listbox is anchored below the trigger and overflows the short,
+    // scrollable block a docs page renders a story into, so the options end up
+    // half-hidden; its own iframe gives the dropdown room to open in full.
     docs: {
+      story: { inline: false, height: '320px' },
       description: {
         component:
           'The only dropdown in the app — `UserSelect`/task-type pickers compose this instead of a raw `<select>`. It renders its own listbox anchored below the trigger, following the ARIA combobox pattern: focus stays on the trigger button and the active option is tracked with `aria-activedescendant`.',

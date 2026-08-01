@@ -25,7 +25,12 @@ const meta = {
   component: Modal,
   tags: ['autodocs'],
   parameters: {
+    // The backdrop is fixed to the viewport, so the canvas needs the full
+    // frame and the docs page needs its own iframe — an inline docs block
+    // is only a couple of hundred pixels tall and crops the dialog.
+    layout: 'fullscreen',
     docs: {
+      story: { inline: false, height: '420px' },
       description: {
         component:
           "The single active modal + backdrop — always mounted by `ModalHost`, never rendered directly by a feature. Traps focus and closes on Esc so keyboard users can't tab or escape the dialog into the page behind it.",

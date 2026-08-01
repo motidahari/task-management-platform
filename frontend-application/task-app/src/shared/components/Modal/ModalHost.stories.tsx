@@ -34,7 +34,11 @@ const meta = {
   component: ModalHost,
   tags: ['autodocs'],
   parameters: {
+    // Renders `Modal` once an event arrives, so the story needs the same
+    // full-frame canvas and its own docs iframe.
+    layout: 'fullscreen',
     docs: {
+      story: { inline: false, height: '420px' },
       description: {
         component:
           'The single active modal, global to the app and mounted exactly once by `AppLayout`. No feature ever renders a modal directly — it emits `modal:open` with a registered id and typed props, and this host looks up the matching content component from `MODAL_REGISTRY`.',

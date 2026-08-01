@@ -7,7 +7,11 @@ const meta = {
   component: ConfirmModal,
   tags: ['autodocs'],
   parameters: {
+    // Composes `Modal`, so it inherits the same viewport-fixed backdrop and
+    // needs the full frame plus a real iframe in the docs page.
+    layout: 'fullscreen',
     docs: {
+      story: { inline: false, height: '420px' },
       description: {
         component:
           'The generic yes/no confirmation dialog — registered under the `confirm` modal id. Every piece of copy is a prop supplied by the caller (already translated in its own scope), so this component owns no text of its own.',
