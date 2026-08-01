@@ -300,8 +300,8 @@ describe('TaskDetailView', () => {
       expect(
         screen.getByText('history-timeline.assignee-label:{"name":"u-unknown"}'),
       ).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'Alice' })).toBeInTheDocument();
-      expect(screen.getByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
+      expect(await screen.findByRole('option', { name: 'Alice' })).toBeInTheDocument();
+      expect(await screen.findByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
     });
   });
 });
