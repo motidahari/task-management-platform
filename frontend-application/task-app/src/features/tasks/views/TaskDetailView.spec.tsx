@@ -300,6 +300,8 @@ describe('TaskDetailView', () => {
       expect(
         screen.getByText('history-timeline.assignee-label:{"name":"u-unknown"}'),
       ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
       expect(await screen.findByRole('option', { name: 'Alice' })).toBeInTheDocument();
       expect(await screen.findByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
     });
