@@ -12,3 +12,4 @@ export * from './logging/logger';
 export * from './sanitizers/sanitize-enum-key';
 export * from './sanitizers/sanitize-string';
 export * from './sanitizers/sanitize-uuid';
+export * from './serialization/microsecond-timestamp';

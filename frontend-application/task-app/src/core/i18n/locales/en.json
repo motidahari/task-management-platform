@@ -51,7 +51,7 @@
     "created-transition": "Created → {{to}}",
     "changed-transition": "{{from}} → {{to}}",
     "closed-transition": "{{from}} → Closed",
-    "assignee-label": "Assigned to {{userId}}",
+    "assignee-label": "Assigned to {{name}}",
     "empty-message": "No history yet.",
     "load-more-button": "Load more"
   },
@@ -72,7 +72,7 @@
   },
   "task-card": {
     "closed-badge": "Closed",
-    "assignee-label": "Assigned to {{userId}}"
+    "assignee-label": "Assigned to {{name}}"
   },
   "task-list": {
     "empty-state": "No tasks yet.",

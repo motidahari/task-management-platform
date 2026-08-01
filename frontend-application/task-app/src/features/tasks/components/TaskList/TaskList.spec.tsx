@@ -5,7 +5,10 @@ import type { Task } from '../../types';
 import { TaskList } from './TaskList';
 
 vi.mock('../../../../shared/hooks/useTranslation', () => ({
-  useTranslation: (scope: string) => ({ t: (key: string) => `${scope}.${key}` }),
+  useTranslation: (scope: string) => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${scope}.${key}:${JSON.stringify(params)}` : `${scope}.${key}`,
+  }),
 }));
 
 function buildTask(overrides: Partial<Task> = {}): Task {
@@ -27,6 +30,8 @@ describe('TaskList', () => {
   let onSelectTask: Mock<(taskId: string) => void>;
   let onLoadMore: Mock<() => void>;
 
+  const resolveAssigneeName = (userId: string): string => userId;
+
   beforeEach(() => {
     vi.clearAllMocks();
     onSelectTask = vi.fn();
@@ -42,6 +47,7 @@ describe('TaskList', () => {
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 
@@ -59,6 +65,7 @@ describe('TaskList', () => {
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 
@@ -77,6 +84,7 @@ describe('TaskList', () => {
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 
@@ -93,12 +101,32 @@ describe('TaskList', () => {
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 
       fireEvent.click(screen.getByTestId('task-card-t-1'));
 
       expect(onSelectTask).toHaveBeenCalledWith('t-1');
+    });
+  });
+
+  describe('Given:a resolver that maps assignee ids to names', () => {
+    it('should pass each task’s resolved assignee name to its card', () => {
+      const tasks = [buildTask({ id: 't-1', assignedUserId: 'u-1' })];
+
+      render(
+        <TaskList
+          tasks={tasks}
+          isLoading={false}
+          hasMore={false}
+          onSelectTask={onSelectTask}
+          onLoadMore={onLoadMore}
+          resolveAssigneeName={() => 'Alice'}
+        />,
+      );
+
+      expect(screen.getByText('task-card.assignee-label:{"name":"Alice"}')).toBeInTheDocument();
     });
   });
 
@@ -111,6 +139,7 @@ describe('TaskList', () => {
           hasMore
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 
@@ -129,6 +158,7 @@ describe('TaskList', () => {
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
         />,
       );
 

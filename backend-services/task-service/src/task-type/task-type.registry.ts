@@ -78,6 +78,26 @@ export class TaskTypeRegistry implements OnModuleInit {
     return lastStatusOf(definition).status;
   }
 
+  /**
+   * Resolves a persisted `status` integer to its definition's display-agnostic
+   * `name`, the one piece of status metadata the wire response carries beyond
+   * the raw number. A persisted task's `type`/`status` pair is always
+   * registered by construction (`onModuleInit` refuses to boot otherwise), so
+   * a lookup miss here is an internal inconsistency, not a client-facing error
+   * — the same reasoning `TaskService.statusDefinitionOf` already applies.
+   */
+  statusNameOf(type: string, status: number): string {
+    const statusDefinition = this.definitionsByType
+      .get(type)
+      ?.statuses.find((candidate) => candidate.status === status);
+
+    if (!statusDefinition) {
+      throw new Error(`Task type "${type}" has no status definition for status ${status}.`);
+    }
+
+    return statusDefinition.name;
+  }
+
   private async assertEveryPersistedTypeIsRegistered(): Promise<void> {
     const rows = await this.dataSource.query<DistinctTaskTypeRow[]>(
       'SELECT DISTINCT type FROM tasks',

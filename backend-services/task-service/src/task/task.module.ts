@@ -8,9 +8,11 @@ import { TaskController } from './task.controller';
 import { TaskService } from './task.service';
 
 /**
- * Wires the tasks write funnel plus the one read endpoint served so far — a
- * task's history page. `TaskController` depends only on `TaskService`, same
- * as every other transport slice in this codebase.
+ * Wires the full tasks transport slice — create, read, status change, close
+ * and history. `TaskController` depends on `TaskService` for every business
+ * decision and on `TaskTypeRegistry` (exported by `TaskTypeModule`) only to
+ * resolve a status name for the wire response, the one piece of translation
+ * that belongs at the controller boundary rather than inside the service.
  */
 @Module({
   imports: [TaskTypeModule],

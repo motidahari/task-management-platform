@@ -52,7 +52,7 @@ function fakeTask(
     assignedUserId: overrides.assignedUserId ?? ASSIGNEE_ID,
     customFields: overrides.customFields ?? {},
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: '2026-01-01T00:00:00.000000Z',
   });
 }
 
@@ -94,6 +94,8 @@ interface TaskDaoMock {
   getByIdForUpdate: jest.Mock;
   update: jest.Mock;
   getById: jest.Mock;
+  getByIdOnPrimary: jest.Mock;
+  findPageByAssignee: jest.Mock;
   close: jest.Mock;
 }
 
@@ -110,7 +112,7 @@ interface TaskServiceHarness {
   taskDao: TaskDaoMock;
   taskStatusHistoryDao: TaskStatusHistoryDaoMock;
   assigneeExistenceDao: { existsById: jest.Mock };
-  taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
+  taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock; statusNameOf: jest.Mock };
   fieldValidator: { validate: jest.Mock };
 }
 
@@ -133,6 +135,8 @@ function defaultTaskDaoMock(): TaskDaoMock {
           }),
       ),
     getById: jest.fn().mockResolvedValue(fakeTask()),
+    getByIdOnPrimary: jest.fn().mockResolvedValue(fakeTask()),
+    findPageByAssignee: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
     close: jest
       .fn()
       .mockImplementation((taskId: string) => fakeTask({ id: taskId, isClosed: true })),
@@ -153,7 +157,7 @@ function taskServiceHarness(
     taskDao: Partial<TaskDaoMock>;
     taskStatusHistoryDao: Partial<TaskStatusHistoryDaoMock>;
     assigneeExistenceDao: { existsById: jest.Mock };
-    taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock };
+    taskTypeRegistry: { findByType: jest.Mock; finalStatusOf: jest.Mock; statusNameOf: jest.Mock };
     fieldValidator: { validate: jest.Mock };
   }> = {},
 ): TaskServiceHarness {
@@ -175,6 +179,7 @@ function taskServiceHarness(
   const taskTypeRegistry = overrides.taskTypeRegistry ?? {
     findByType: jest.fn().mockReturnValue({ type: 'procurement', statuses: PROCUREMENT_STATUSES }),
     finalStatusOf: jest.fn().mockReturnValue(3),
+    statusNameOf: jest.fn().mockReturnValue('requested'),
   };
   const fieldValidator = overrides.fieldValidator ?? {
     validate: jest.fn().mockReturnValue({ valid: true, sanitizedFields: {} }),
@@ -250,6 +255,7 @@ describe('TaskService', () => {
         taskTypeRegistry: {
           findByType: jest.fn().mockReturnValue(null),
           finalStatusOf: jest.fn(),
+          statusNameOf: jest.fn(),
         },
       });
 
@@ -856,6 +862,138 @@ describe('TaskService', () => {
       // the task closed without its history entry.
       expect(taskDao.close).toHaveBeenCalledTimes(1);
       expect(taskStatusHistoryDao.appendClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Given:a task exists, When:getById is called', () => {
+    it('should read it from the primary connection and return it unchanged', async () => {
+      const task = fakeTask({ id: 'task-id' });
+      const { service, taskDao } = taskServiceHarness({
+        taskDao: { getByIdOnPrimary: jest.fn().mockResolvedValue(task) },
+      });
+
+      const result = await service.getById('task-id');
+
+      expect(taskDao.getByIdOnPrimary).toHaveBeenCalledWith('task-id');
+      expect(result).toBe(task);
+    });
+  });
+
+  describe('Given:no task exists for the id, When:getById is called', () => {
+    it('should propagate the DAO rejection rather than swallow it', async () => {
+      const { service } = taskServiceHarness({
+        taskDao: {
+          getByIdOnPrimary: jest.fn().mockRejectedValue(new TaskNotFoundException('missing-task')),
+        },
+      });
+
+      await expect(service.getById('missing-task')).rejects.toThrow(TaskNotFoundException);
+    });
+  });
+
+  describe('Given:an assignee with tasks of different types, When:getTasksPageByAssignee is called', () => {
+    it('should map the DAO page to the wire shape, resolving each item’s statusName from its own type', async () => {
+      const procurementTask = fakeTask({ id: 'task-1', type: 'procurement', status: 2 });
+      const developmentTask = fakeTask({ id: 'task-2', type: 'development', status: 1 });
+      const statusNameOf = jest
+        .fn()
+        .mockImplementation((type: string) =>
+          type === 'procurement' ? 'supplier-offers-received' : 'created',
+        );
+      const { service } = taskServiceHarness({
+        taskDao: {
+          findPageByAssignee: jest
+            .fn()
+            .mockResolvedValue({ items: [procurementTask, developmentTask], nextCursor: null }),
+        },
+        taskTypeRegistry: {
+          findByType: jest.fn(),
+          finalStatusOf: jest.fn(),
+          statusNameOf,
+        },
+      });
+
+      const result = await service.getTasksPageByAssignee(ASSIGNEE_ID, {});
+
+      expect(statusNameOf).toHaveBeenCalledWith('procurement', 2);
+      expect(statusNameOf).toHaveBeenCalledWith('development', 1);
+      expect(result.items).toEqual([
+        procurementTask.toJSON('supplier-offers-received'),
+        developmentTask.toJSON('created'),
+      ]);
+      expect(result.nextCursor).toBeNull();
+    });
+  });
+
+  describe('Given:no isClosed filter is requested, When:getTasksPageByAssignee is called', () => {
+    it('should pass isClosed through as undefined, leaving every task in the page', async () => {
+      const { service, taskDao } = taskServiceHarness();
+
+      await service.getTasksPageByAssignee(ASSIGNEE_ID, {});
+
+      expect(taskDao.findPageByAssignee).toHaveBeenCalledWith(
+        ASSIGNEE_ID,
+        20,
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('Given:isClosed:false is requested, When:getTasksPageByAssignee is called', () => {
+    it('should pass it straight through to the DAO filter', async () => {
+      const { service, taskDao } = taskServiceHarness();
+
+      await service.getTasksPageByAssignee(ASSIGNEE_ID, { isClosed: false });
+
+      expect(taskDao.findPageByAssignee).toHaveBeenCalledWith(ASSIGNEE_ID, 20, undefined, false);
+    });
+  });
+
+  describe('Given:a cursor is requested, When:getTasksPageByAssignee is called', () => {
+    it('should pass it straight through to the DAO', async () => {
+      const { service, taskDao } = taskServiceHarness();
+
+      await service.getTasksPageByAssignee(ASSIGNEE_ID, { cursor: 'incoming-cursor' });
+
+      expect(taskDao.findPageByAssignee).toHaveBeenCalledWith(
+        ASSIGNEE_ID,
+        20,
+        'incoming-cursor',
+        undefined,
+      );
+    });
+  });
+
+  describe('Given:no limit is requested, When:getTasksPageByAssignee is called', () => {
+    it('should default the page size to 20', async () => {
+      const { service, taskDao } = taskServiceHarness();
+
+      const result = await service.getTasksPageByAssignee(ASSIGNEE_ID, {});
+
+      expect(taskDao.findPageByAssignee).toHaveBeenCalledWith(
+        ASSIGNEE_ID,
+        20,
+        undefined,
+        undefined,
+      );
+      expect(result.limit).toBe(20);
+    });
+  });
+
+  describe('Given:a requested limit above the maximum, When:getTasksPageByAssignee is called', () => {
+    it('should clamp the page size to 100 rather than rejecting the request', async () => {
+      const { service, taskDao } = taskServiceHarness();
+
+      const result = await service.getTasksPageByAssignee(ASSIGNEE_ID, { limit: 500 });
+
+      expect(taskDao.findPageByAssignee).toHaveBeenCalledWith(
+        ASSIGNEE_ID,
+        100,
+        undefined,
+        undefined,
+      );
+      expect(result.limit).toBe(100);
     });
   });
 });

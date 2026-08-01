@@ -19,7 +19,8 @@ export interface TaskProps {
   assignedUserId: string;
   customFields: Record<string, unknown>;
   createdAt: Date;
-  updatedAt: Date;
+  /** Fixed-length, microsecond-precision UTC ISO string — see `toMicrosecondIso`. Never a `Date`: JS `Date` truncates to millisecond precision, which is exactly the precision this field exists to preserve. */
+  updatedAt: string;
 }
 
 /**
@@ -36,7 +37,7 @@ export interface TaskSnapshot {
   readonly assignedUserId: string;
   readonly customFields: Record<string, unknown>;
   readonly createdAt: Date;
-  readonly updatedAt: Date;
+  readonly updatedAt: string;
 }
 
 /**
@@ -57,7 +58,7 @@ export class Task {
   private _assignedUserId!: string;
   private _customFields!: Record<string, unknown>;
   private _createdAt!: Date;
-  private _updatedAt!: Date;
+  private _updatedAt!: string;
 
   constructor(props: TaskProps) {
     this.id = props.id;
@@ -159,13 +160,13 @@ export class Task {
     this._createdAt = value;
   }
 
-  get updatedAt(): Date {
+  get updatedAt(): string {
     return this._updatedAt;
   }
 
-  set updatedAt(value: Date) {
-    if (!isValidDate(value)) {
-      throw new ValidationException('Task updatedAt must be a valid Date');
+  set updatedAt(value: string) {
+    if (!isValidString(value)) {
+      throw new ValidationException('Task updatedAt must be a non-empty string');
     }
 
     this._updatedAt = value;
