@@ -157,4 +157,32 @@ describe('TaskTypeRegistry', () => {
       expect(registry.finalStatusOf('widget')).toBe(3);
     });
   });
+
+  describe('Given:a registered type and one of its status numbers, When:resolving the status name', () => {
+    it('should return the matching status definition name', () => {
+      const registry = registryWith([widgetDefinition()]);
+
+      expect(registry.statusNameOf('widget', 2)).toBe('assembled');
+    });
+  });
+
+  describe('Given:a type the registry does not recognize, When:resolving a status name', () => {
+    it('should throw', () => {
+      const registry = registryWith([widgetDefinition()]);
+
+      expect(() => registry.statusNameOf('not-a-real-type', 1)).toThrow(
+        'Task type "not-a-real-type" has no status definition for status 1.',
+      );
+    });
+  });
+
+  describe('Given:a registered type but a status number it does not declare, When:resolving a status name', () => {
+    it('should throw', () => {
+      const registry = registryWith([widgetDefinition()]);
+
+      expect(() => registry.statusNameOf('widget', 99)).toThrow(
+        'Task type "widget" has no status definition for status 99.',
+      );
+    });
+  });
 });

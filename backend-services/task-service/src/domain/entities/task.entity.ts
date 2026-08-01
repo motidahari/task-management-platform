@@ -1,4 +1,12 @@
-import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { utcTimestampTextExpression } from '@core/shared';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryColumn,
+  UpdateDateColumn,
+  VirtualColumn,
+} from 'typeorm';
 
 /**
  * Persistence mapping only — ORM metadata behind the DAO boundary. Never
@@ -39,4 +47,19 @@ export class TaskEntity {
 
   @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at', default: () => 'now()' })
   updatedAt!: Date;
+
+  /**
+   * `updated_at` projected as UTC text at full stored precision, computed on
+   * every read rather than persisted — the pg driver parses `timestamptz` to
+   * a millisecond-precision `Date` before TypeORM ever sees the row, so the
+   * only way to recover the microseconds Postgres actually stored is to read
+   * them back out as text. `createdAt` gets no equivalent column: the keyset
+   * cursor encodes it as a `Date`, and this codebase never applies a global
+   * `timestamptz` type-parser override that would affect both columns alike.
+   */
+  @VirtualColumn({
+    type: 'text',
+    query: (alias) => utcTimestampTextExpression(`${alias}.updated_at`),
+  })
+  updatedAtRaw!: string;
 }

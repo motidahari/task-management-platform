@@ -10,7 +10,10 @@ import type { User } from '../types';
 import { MyTasksView } from './MyTasksView';
 
 vi.mock('../../../shared/hooks/useTranslation', () => ({
-  useTranslation: (scope: string) => ({ t: (key: string) => `${scope}.${key}` }),
+  useTranslation: (scope: string) => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${scope}.${key}:${JSON.stringify(params)}` : `${scope}.${key}`,
+  }),
 }));
 
 vi.mock('../components/CreateTaskForm', () => ({
@@ -147,6 +150,43 @@ describe('MyTasksView', () => {
       fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', { isClosed: true });
+    });
+  });
+
+  describe('Given:a user is selected and their tasks are assigned to known and unknown users', () => {
+    it('should resolve each card’s assignee to a name, falling back to the raw id for an assignee outside the loaded directory', () => {
+      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockTaskStore({
+        items: [
+          {
+            id: 't-1',
+            type: 'development',
+            status: 1,
+            statusName: 'created',
+            isClosed: false,
+            assignedUserId: 'u-1',
+            customFields: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            id: 't-2',
+            type: 'development',
+            status: 1,
+            statusName: 'created',
+            isClosed: false,
+            assignedUserId: 'u-unknown',
+            customFields: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+
+      renderMyTasksView();
+
+      expect(screen.getByText('task-card.assignee-label:{"name":"Alice"}')).toBeInTheDocument();
+      expect(screen.getByText('task-card.assignee-label:{"name":"u-unknown"}')).toBeInTheDocument();
     });
   });
 

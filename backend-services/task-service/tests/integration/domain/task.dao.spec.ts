@@ -49,6 +49,35 @@ async function insertTaskAt(
   return { id: row.id, createdAt: row.created_at };
 }
 
+interface InsertedPreciseTaskRow {
+  readonly id: string;
+}
+
+/**
+ * Inserts a row with an exact, caller-chosen `updated_at` carrying
+ * sub-millisecond digits Postgres can round-trip but the pg driver's own
+ * `Date` parsing cannot — the one way to prove the microsecond projection
+ * actually threads through end to end, rather than merely agreeing with
+ * whatever a plain `now()` insert happened to produce.
+ */
+async function insertTaskWithPreciseUpdatedAt(
+  dataSource: DataSource,
+  assignedUserId: string,
+  updatedAt: string,
+): Promise<InsertedPreciseTaskRow> {
+  const rows: Array<{ id: string }> = await dataSource.query(
+    `INSERT INTO tasks (type, assigned_user_id, updated_at) VALUES ($1, $2, $3) RETURNING id`,
+    ['procurement', assignedUserId, updatedAt],
+  );
+  const [row] = rows;
+
+  if (!row) {
+    throw new Error('INSERT ... RETURNING produced no row');
+  }
+
+  return { id: row.id };
+}
+
 describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () => {
   let testDatabase: TestDatabase;
   let taskDao: TaskDao;
@@ -272,6 +301,105 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
       await expect(taskDao.findPageByAssignee(user.id, 10, wrongShapeCursor)).rejects.toThrow(
         ValidationException,
       );
+    });
+  });
+
+  describe('Given:a task row exists, When:getByIdOnPrimary is called with its id', () => {
+    it('should return the mapped Task domain model without taking a lock', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const taskRepository = testDatabase.dataSource.getRepository(TaskEntity);
+      const user = await userRepository.save(buildTestUser());
+      const savedTask = await taskRepository.save(buildTestTask(user.id));
+
+      const task = await taskDao.getByIdOnPrimary(savedTask.id);
+
+      expect(task.id).toBe(savedTask.id);
+      expect(task.assignedUserId).toBe(user.id);
+    });
+  });
+
+  describe('Given:no task with that id, When:getByIdOnPrimary is called', () => {
+    it('should throw NotFoundException', async () => {
+      await expect(
+        taskDao.getByIdOnPrimary('00000000-0000-0000-0000-000000000000'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('Given:a mix of open and closed tasks for one assignee, When:findPageByAssignee is called with isClosed:false', () => {
+    it('should return only the open tasks', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const taskRepository = testDatabase.dataSource.getRepository(TaskEntity);
+      const user = await userRepository.save(buildTestUser());
+      const openTask = await taskRepository.save(buildTestTask(user.id, { isClosed: false }));
+      await taskRepository.save(buildTestTask(user.id, { isClosed: true }));
+
+      const page = await taskDao.findPageByAssignee(user.id, 10, undefined, false);
+
+      expect(page.items.map((task) => task.id)).toEqual([openTask.id]);
+    });
+  });
+
+  describe('Given:a mix of open and closed tasks for one assignee, When:findPageByAssignee is called with isClosed:true', () => {
+    it('should return only the closed tasks', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const taskRepository = testDatabase.dataSource.getRepository(TaskEntity);
+      const user = await userRepository.save(buildTestUser());
+      await taskRepository.save(buildTestTask(user.id, { isClosed: false }));
+      const closedTask = await taskRepository.save(buildTestTask(user.id, { isClosed: true }));
+
+      const page = await taskDao.findPageByAssignee(user.id, 10, undefined, true);
+
+      expect(page.items.map((task) => task.id)).toEqual([closedTask.id]);
+    });
+  });
+
+  describe('Given:a mix of open and closed tasks for one assignee, When:findPageByAssignee is called with no isClosed filter', () => {
+    it('should return every task regardless of its closed state', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const taskRepository = testDatabase.dataSource.getRepository(TaskEntity);
+      const user = await userRepository.save(buildTestUser());
+      await taskRepository.save(buildTestTask(user.id, { isClosed: false }));
+      await taskRepository.save(buildTestTask(user.id, { isClosed: true }));
+
+      const page = await taskDao.findPageByAssignee(user.id, 10);
+
+      expect(page.items).toHaveLength(2);
+    });
+  });
+
+  describe('Given:a task row whose updated_at carries sub-millisecond precision, When:reading it through the pessimistic-lock path', () => {
+    it('should populate updatedAt with the full microsecond-precision string, not a millisecond-truncated one', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const user = await userRepository.save(buildTestUser());
+      const inserted = await insertTaskWithPreciseUpdatedAt(
+        testDatabase.dataSource,
+        user.id,
+        '2026-01-01T00:00:00.123456Z',
+      );
+
+      const task = await testDatabase.dataSource.transaction((manager) =>
+        taskDao.getByIdForUpdate(inserted.id, manager),
+      );
+
+      expect(task.updatedAt).toBe('2026-01-01T00:00:00.123456Z');
+    });
+  });
+
+  describe('Given:a task row whose updated_at carries sub-millisecond precision, When:reading it through the keyset query-builder path', () => {
+    it('should populate every returned item’s updatedAt with the full microsecond-precision string', async () => {
+      const userRepository = testDatabase.dataSource.getRepository(UserEntity);
+      const user = await userRepository.save(buildTestUser());
+      const inserted = await insertTaskWithPreciseUpdatedAt(
+        testDatabase.dataSource,
+        user.id,
+        '2026-01-01T00:00:00.654321Z',
+      );
+
+      const page = await taskDao.findPageByAssignee(user.id, 10);
+      const found = page.items.find((task) => task.id === inserted.id);
+
+      expect(found?.updatedAt).toBe('2026-01-01T00:00:00.654321Z');
     });
   });
 });

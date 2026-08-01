@@ -106,6 +106,11 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
    * Postgres returns `RETURNING` rows raw (snake-cased columns, undecorated),
    * not hydrated entities, so the concrete DAO supplies `mapRawRow` to translate
    * that one shape — the only piece here that knows the table's columns.
+   *
+   * `returningExpression` defaults to `'*'`; a caller that needs a computed
+   * projection alongside every column (e.g. a microsecond-precision text cast
+   * a plain `*` cannot express) overrides it — every other call site is
+   * unaffected by the default staying exactly what it always was.
    */
   protected async updateByIdReturning(
     id: string,
@@ -113,13 +118,14 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
     mapRawRow: (rawRow: unknown) => TEntity,
     onMissing: () => never,
     manager: EntityManager,
+    returningExpression: string = '*',
   ): Promise<TDomain> {
     const updateResult = await this.repositoryFor(manager)
       .createQueryBuilder()
       .update(this.entity)
       .set(set)
       .where('id = :id', { id })
-      .returning('*')
+      .returning(returningExpression)
       .execute();
 
     const [rawRow] = updateResult.raw as unknown[];

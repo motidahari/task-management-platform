@@ -13,6 +13,7 @@ export interface TaskListProps {
   readonly hasMore: boolean;
   readonly onSelectTask: (taskId: string) => void;
   readonly onLoadMore: () => void;
+  readonly resolveAssigneeName: (userId: string) => string;
 }
 
 /**
@@ -27,6 +28,7 @@ export function TaskList({
   hasMore,
   onSelectTask,
   onLoadMore,
+  resolveAssigneeName,
 }: TaskListProps): ReactElement {
   const { t } = useTranslation('task-list');
   const isInitialLoad = isLoading && tasks.length === 0;
@@ -39,7 +41,12 @@ export function TaskList({
       {tasks.length > 0 && (
         <div className="task-list__grid">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onSelect={onSelectTask} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              assigneeName={resolveAssigneeName(task.assignedUserId)}
+              onSelect={onSelectTask}
+            />
           ))}
         </div>
       )}

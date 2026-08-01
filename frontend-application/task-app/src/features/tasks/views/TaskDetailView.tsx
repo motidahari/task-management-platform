@@ -28,12 +28,23 @@ import { HistoryTimeline } from '../components/HistoryTimeline';
 import { StatusStepper } from '../components/StatusStepper';
 import { useTaskLifecycle } from '../hooks/useTaskLifecycle';
 import { useTaskRealtime } from '../hooks/useTaskRealtime';
+import { useCurrentUserStore } from '../stores/useCurrentUserStore';
 import { useTaskStore } from '../stores/useTaskStore';
 import { useTaskTypeStore } from '../stores/useTaskTypeStore';
-import type { StatusDefinition, Task, TaskTypeDefinition } from '../types';
+import type { StatusDefinition, Task, TaskTypeDefinition, User } from '../types';
 import './TaskDetailView.scss';
 
 type ActiveAction = 'advance' | 'reverse' | null;
+
+/**
+ * Task/history payloads carry only an assignee id, by contract — this is the
+ * one place that turns those ids into the names both the timeline and the
+ * reassignment picker show, falling back to the raw id for anyone outside
+ * the loaded directory rather than a blank.
+ */
+function buildAssigneeNameLookup(users: readonly User[]): Record<string, string> {
+  return Object.fromEntries(users.map((user) => [user.id, user.name]));
+}
 
 function findTaskType(
   definitions: readonly TaskTypeDefinition[],
@@ -47,14 +58,20 @@ function findStatusIndex(statuses: readonly StatusDefinition[], status: number):
 }
 
 /**
- * Reassignment candidates come entirely from data this task already carries
- * — its current assignee plus everyone the history shows it was ever handed
- * to — rather than a separate user directory, so the picker stays populated
- * with real, task-relevant people with no extra request.
+ * Reassignment candidates' ids come entirely from data this task already
+ * carries — its current assignee plus everyone the history shows it was
+ * ever handed to — rather than a separate query, so the picker stays
+ * populated with real, task-relevant people with no extra request. Each
+ * id's label is resolved to a name via the loaded user directory, falling
+ * back to the raw id for a candidate outside it.
  */
-function collectAssigneeOptions(task: Task, historyAssigneeIds: readonly string[]): SelectOption[] {
+function collectAssigneeOptions(
+  task: Task,
+  historyAssigneeIds: readonly string[],
+  resolveAssigneeName: (userId: string) => string,
+): SelectOption[] {
   const ids = new Set([task.assignedUserId, ...historyAssigneeIds]);
-  return Array.from(ids).map((id) => ({ value: id, label: id }));
+  return Array.from(ids).map((id) => ({ value: id, label: resolveAssigneeName(id) }));
 }
 
 function extractMissingFields(error: ApiError | null): readonly string[] {
@@ -84,6 +101,8 @@ export function TaskDetailView(): ReactElement {
   const fetchTask = useTaskStore((state) => state.fetchTask);
   const fetchTaskHistory = useTaskStore((state) => state.fetchTaskHistory);
   const taskTypeDefinitions = useTaskTypeStore((state) => state.definitions);
+  const users = useCurrentUserStore((state) => state.users);
+  const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
   const lifecycle = useTaskLifecycle();
 
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
@@ -102,6 +121,13 @@ export function TaskDetailView(): ReactElement {
     void fetchTask(taskId);
     void fetchTaskHistory(taskId);
   }, [taskId, fetchTask, fetchTaskHistory]);
+
+  // A user landing here directly (rather than via `MyTasksView`) has no
+  // directory loaded yet; one arriving from the picker already does, so this
+  // never re-fetches on top of it.
+  useEffect(() => {
+    if (users.length === 0) void fetchUsers();
+  }, [users.length, fetchUsers]);
 
   // A task change (a successful mutation, or the auto-refetch that follows a
   // TASK_STATE_CONFLICT) always makes whatever form was open stale — closing
@@ -132,13 +158,22 @@ export function TaskDetailView(): ReactElement {
   const canReverse = currentStatusIndex > 0;
   const canClose = currentTask !== null && currentTask.status === taskTypeDef?.finalStatus;
 
+  const assigneeNamesById = useMemo(() => buildAssigneeNameLookup(users), [users]);
+  const resolveAssigneeName = useCallback(
+    (userId: string) => assigneeNamesById[userId] ?? userId,
+    [assigneeNamesById],
+  );
+
   const historyAssigneeIds = useMemo(
     () => historyItems.map((entry) => entry.assignedUserId),
     [historyItems],
   );
   const assigneeOptions = useMemo(
-    () => (currentTask ? collectAssigneeOptions(currentTask, historyAssigneeIds) : []),
-    [currentTask, historyAssigneeIds],
+    () =>
+      currentTask
+        ? collectAssigneeOptions(currentTask, historyAssigneeIds, resolveAssigneeName)
+        : [],
+    [currentTask, historyAssigneeIds, resolveAssigneeName],
   );
 
   function openAdvance(): void {
@@ -351,6 +386,7 @@ export function TaskDetailView(): ReactElement {
           hasMore={historyNextCursor !== null}
           isLoading={isLoading}
           onLoadMore={handleLoadMoreHistory}
+          resolveAssigneeName={resolveAssigneeName}
         />
       </Card>
     </div>

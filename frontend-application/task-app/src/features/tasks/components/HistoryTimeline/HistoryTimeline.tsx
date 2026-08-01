@@ -13,6 +13,7 @@ export interface HistoryTimelineProps {
   readonly hasMore: boolean;
   readonly isLoading: boolean;
   readonly onLoadMore: () => void;
+  readonly resolveAssigneeName: (userId: string) => string;
 }
 
 type TranslateEntry = (key: string, params?: Record<string, unknown>) => string;
@@ -59,6 +60,7 @@ export function HistoryTimeline({
   hasMore,
   isLoading,
   onLoadMore,
+  resolveAssigneeName,
 }: HistoryTimelineProps): ReactElement {
   const { t } = useTranslation('history-timeline');
   const isInitialLoad = isLoading && entries.length === 0;
@@ -88,7 +90,7 @@ export function HistoryTimeline({
               {resolveTransitionLabel(entry, statuses, t)}
             </p>
             <p className="history-timeline__meta">
-              {t('assignee-label', { userId: entry.assignedUserId })}
+              {t('assignee-label', { name: resolveAssigneeName(entry.assignedUserId) })}
             </p>
             {Object.keys(entry.fieldsSnapshot).length > 0 && (
               <ul className="history-timeline__fields">

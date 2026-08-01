@@ -8,6 +8,7 @@ import './TaskCard.scss';
 
 export interface TaskCardProps {
   readonly task: Task;
+  readonly assigneeName: string;
   readonly onSelect: (taskId: string) => void;
 }
 
@@ -21,7 +22,7 @@ function resolveStatusBadgeVariant(isClosed: boolean): BadgeVariant {
  * which task it renders and what happens on selection both come from the
  * caller, so it stays reusable across every list that shows tasks.
  */
-export function TaskCard({ task, onSelect }: TaskCardProps): ReactElement {
+export function TaskCard({ task, assigneeName, onSelect }: TaskCardProps): ReactElement {
   const { t } = useTranslation('task-card');
 
   return (
@@ -36,9 +37,7 @@ export function TaskCard({ task, onSelect }: TaskCardProps): ReactElement {
         <Badge variant={resolveStatusBadgeVariant(task.isClosed)}>
           {task.isClosed ? t('closed-badge') : task.statusName}
         </Badge>
-        <span className="task-card__assignee">
-          {t('assignee-label', { userId: task.assignedUserId })}
-        </span>
+        <span className="task-card__assignee">{t('assignee-label', { name: assigneeName })}</span>
       </button>
     </Card>
   );
