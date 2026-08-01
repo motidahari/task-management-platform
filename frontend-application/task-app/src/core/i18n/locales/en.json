@@ -78,6 +78,8 @@
     "next-status-heading": "Advance to {{status}}",
     "final-status-title": "This is the final status.",
     "final-status-description": "There's nowhere further to advance — close the task below.",
+    "type-unresolved-title": "We can't show actions for \"{{type}}\".",
+    "type-unresolved-description": "This task's type has no workflow definition loaded, so no action can be offered safely.",
     "advance-button": "Move forward",
     "reverse-button": "Move backward",
     "close-button": "Close task",

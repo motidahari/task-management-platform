@@ -119,8 +119,15 @@ describe('docker-compose', () => {
 
     it('reaches postgres and redis over the compose network, not localhost', () => {
       const { DB_URL, REDIS_URL } = service('backend').environment;
-      assert.match(DB_URL, /@postgres:5432\//);
+      assert.match(DB_URL, /\/\/postgres:5432\//);
       assert.match(REDIS_URL, /\/\/redis:6379/);
+    });
+
+    it('supplies database credentials as their own variables, never inside the URL', () => {
+      const { DB_URL, POSTGRES_USER, POSTGRES_PASSWORD } = service('backend').environment;
+      assert.doesNotMatch(DB_URL, /:\/\/[^\s/@]*:[^\s/@]+@/);
+      assert.ok(POSTGRES_USER, 'POSTGRES_USER is missing — the app cannot compose a connection');
+      assert.ok(POSTGRES_PASSWORD, 'POSTGRES_PASSWORD is missing — the app cannot authenticate');
     });
 
     it('carries no fallback credentials in its database URL', () => {

@@ -2,7 +2,10 @@
 design-packages/
 
 # Dependencies
-node_modules/
+# no trailing slash: a bare `node_modules/` matches only a real directory, and
+# a worktree links these in rather than installing its own — a symlink is a
+# file, so the slashed form would let it be committed
+node_modules
 
 # Build output
 dist/
