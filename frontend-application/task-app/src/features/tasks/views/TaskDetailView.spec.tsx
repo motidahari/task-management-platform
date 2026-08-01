@@ -65,6 +65,128 @@ const developmentType: TaskTypeDefinition = {
   ],
 };
 
+// Neither name overlaps a real registered type — these exist only to prove
+// action availability is derived purely from `statuses.length` and
+// `finalStatus`, with no hard-coded status count anywhere in the drawer.
+const twoStatusType: TaskTypeDefinition = {
+  type: 'widget-review',
+  displayName: 'Widget review',
+  finalStatus: 2,
+  statuses: [
+    { status: 1, name: 'draft', displayName: 'Draft', requiredFields: [] },
+    { status: 2, name: 'approved', displayName: 'Approved', requiredFields: [] },
+  ],
+};
+
+const sevenStatusType: TaskTypeDefinition = {
+  type: 'release-pipeline',
+  displayName: 'Release pipeline',
+  finalStatus: 7,
+  statuses: [
+    { status: 1, name: 'planning', displayName: 'Planning', requiredFields: [] },
+    { status: 2, name: 'design', displayName: 'Design', requiredFields: [] },
+    { status: 3, name: 'build', displayName: 'Build', requiredFields: [] },
+    { status: 4, name: 'test', displayName: 'Test', requiredFields: [] },
+    { status: 5, name: 'staging', displayName: 'Staging', requiredFields: [] },
+    { status: 6, name: 'review', displayName: 'Review', requiredFields: [] },
+    { status: 7, name: 'released', displayName: 'Released', requiredFields: [] },
+  ],
+};
+
+interface StatusActionExpectation {
+  readonly label: string;
+  readonly typeDef: TaskTypeDefinition;
+  readonly status: number;
+  readonly expectAdvance: boolean;
+  readonly expectReverse: boolean;
+  readonly expectClose: boolean;
+  readonly nextStatusDisplayName: string | null;
+}
+
+const STATUS_ACTION_MATRIX: readonly StatusActionExpectation[] = [
+  {
+    label: 'a 2-status type at its first status',
+    typeDef: twoStatusType,
+    status: 1,
+    expectAdvance: true,
+    expectReverse: false,
+    expectClose: false,
+    nextStatusDisplayName: 'Approved',
+  },
+  {
+    label: 'a 2-status type at its final status',
+    typeDef: twoStatusType,
+    status: 2,
+    expectAdvance: false,
+    expectReverse: true,
+    expectClose: true,
+    nextStatusDisplayName: null,
+  },
+  {
+    label: 'a 7-status type at its first status',
+    typeDef: sevenStatusType,
+    status: 1,
+    expectAdvance: true,
+    expectReverse: false,
+    expectClose: false,
+    nextStatusDisplayName: 'Design',
+  },
+  {
+    label: 'a 7-status type at status 2 of 7 (middle)',
+    typeDef: sevenStatusType,
+    status: 2,
+    expectAdvance: true,
+    expectReverse: true,
+    expectClose: false,
+    nextStatusDisplayName: 'Build',
+  },
+  {
+    label: 'a 7-status type at status 3 of 7 (middle)',
+    typeDef: sevenStatusType,
+    status: 3,
+    expectAdvance: true,
+    expectReverse: true,
+    expectClose: false,
+    nextStatusDisplayName: 'Test',
+  },
+  {
+    label: 'a 7-status type at status 4 of 7 (middle)',
+    typeDef: sevenStatusType,
+    status: 4,
+    expectAdvance: true,
+    expectReverse: true,
+    expectClose: false,
+    nextStatusDisplayName: 'Staging',
+  },
+  {
+    label: 'a 7-status type at status 5 of 7 (middle)',
+    typeDef: sevenStatusType,
+    status: 5,
+    expectAdvance: true,
+    expectReverse: true,
+    expectClose: false,
+    nextStatusDisplayName: 'Review',
+  },
+  {
+    label: 'a 7-status type at status 6 of 7 (middle)',
+    typeDef: sevenStatusType,
+    status: 6,
+    expectAdvance: true,
+    expectReverse: true,
+    expectClose: false,
+    nextStatusDisplayName: 'Released',
+  },
+  {
+    label: 'a 7-status type at its final status',
+    typeDef: sevenStatusType,
+    status: 7,
+    expectAdvance: false,
+    expectReverse: true,
+    expectClose: true,
+    nextStatusDisplayName: null,
+  },
+];
+
 function buildTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 't-1',
@@ -304,6 +426,101 @@ describe('TaskDetailView', () => {
       fireEvent.click(screen.getByLabelText('assignee-select.label'));
       expect(await screen.findByRole('option', { name: 'Alice' })).toBeInTheDocument();
       expect(await screen.findByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Given:a type whose action rules are derived purely from its statuses, at any status count', () => {
+    it.each(STATUS_ACTION_MATRIX)(
+      'should render exactly the actions valid for $label, with no status-count assumption baked in',
+      async ({
+        typeDef,
+        status,
+        expectAdvance,
+        expectReverse,
+        expectClose,
+        nextStatusDisplayName,
+      }) => {
+        useTaskTypeStore.setState({ status: 'ready', definitions: [typeDef], error: null });
+        getTaskMock.mockResolvedValueOnce(buildTask({ type: typeDef.type, status }));
+
+        renderTaskDetailView();
+
+        await screen.findByTestId('status-stepper');
+
+        if (expectAdvance) {
+          expect(screen.getByTestId('advance-submit')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByTestId('advance-submit')).not.toBeInTheDocument();
+        }
+
+        if (expectReverse) {
+          expect(screen.getByTestId('reverse-submit')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByTestId('reverse-submit')).not.toBeInTheDocument();
+        }
+
+        if (expectClose) {
+          expect(screen.getByTestId('close-button')).toBeInTheDocument();
+        } else {
+          expect(screen.queryByTestId('close-button')).not.toBeInTheDocument();
+        }
+
+        if (nextStatusDisplayName) {
+          expect(
+            screen.getByText(
+              `task-detail-view.next-status-heading:${JSON.stringify({ status: nextStatusDisplayName })}`,
+            ),
+          ).toBeInTheDocument();
+        } else {
+          expect(screen.getByText('task-detail-view.final-status-title')).toBeInTheDocument();
+        }
+      },
+    );
+  });
+
+  describe('Given:the loaded task’s type has no entry in the loaded task-type metadata', () => {
+    it('should render an explicit error naming the type, and retry by reloading the task-type metadata (not just the task)', async () => {
+      const loadTaskTypesMock = vi
+        .spyOn(useTaskTypeStore.getState(), 'loadTaskTypes')
+        .mockResolvedValue(undefined);
+      getTaskMock.mockResolvedValueOnce(buildTask({ type: 'ghost-type', status: 1 }));
+
+      renderTaskDetailView();
+
+      expect(
+        await screen.findByText('task-detail-view.type-unresolved-title:{"type":"ghost-type"}'),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('status-stepper')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('advance-submit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('reverse-submit')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('close-button')).not.toBeInTheDocument();
+
+      getTaskMock.mockResolvedValueOnce(buildTask({ type: 'ghost-type', status: 1 }));
+      fireEvent.click(screen.getByTestId('task-detail-view-type-error-retry'));
+
+      expect(loadTaskTypesMock).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(getTaskMock).toHaveBeenCalledTimes(2));
+    });
+  });
+
+  describe('Given:the loaded task’s type resolves with an empty statuses array', () => {
+    it('should render the same explicit error state as an unknown type', async () => {
+      useTaskTypeStore.setState({
+        status: 'ready',
+        definitions: [
+          { type: 'empty-type', displayName: 'Empty type', finalStatus: 0, statuses: [] },
+        ],
+        error: null,
+      });
+      getTaskMock.mockResolvedValueOnce(buildTask({ type: 'empty-type', status: 1 }));
+
+      renderTaskDetailView();
+
+      expect(
+        await screen.findByText('task-detail-view.type-unresolved-title:{"type":"empty-type"}'),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('status-stepper')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('task-detail-view-actions')).not.toBeInTheDocument();
     });
   });
 });

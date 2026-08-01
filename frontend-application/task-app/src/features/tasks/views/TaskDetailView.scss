@@ -73,6 +73,10 @@
     align-self: stretch;
   }
 
+  &__type-error {
+    align-self: stretch;
+  }
+
   &__form {
     @include mixins.flx($direction: column, $gap: vars.$spacing-md);
     align-self: stretch;

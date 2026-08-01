@@ -31,8 +31,10 @@ export interface TaskStoreState {
   readonly items: readonly Task[];
   readonly nextCursor: string | null;
   readonly currentTask: Task | null;
-  /** The user the currently loaded `items` page was fetched for — `applyTaskEvent` needs it to tell "reassigned onto this list" from "reassigned away from it". */
+  /** The user the currently loaded `items` page was fetched for — every list mutation needs it to tell "belongs on this page" from "belongs on someone else's". */
   readonly listUserId: string | null;
+  /** The open/closed filter the currently loaded `items` page was fetched with — absent when the page was fetched with no filter, so both open and closed tasks belong on it. */
+  readonly listIsClosed?: boolean;
   readonly historyItems: readonly TaskHistoryEntry[];
   readonly historyNextCursor: string | null;
   readonly isLoading: boolean;
@@ -53,6 +55,7 @@ const initialState: Pick<
   | 'nextCursor'
   | 'currentTask'
   | 'listUserId'
+  | 'listIsClosed'
   | 'historyItems'
   | 'historyNextCursor'
   | 'isLoading'
@@ -62,6 +65,7 @@ const initialState: Pick<
   nextCursor: null,
   currentTask: null,
   listUserId: null,
+  listIsClosed: undefined,
   historyItems: [],
   historyNextCursor: null,
   isLoading: false,
@@ -93,20 +97,37 @@ function isStaleEvent(payloadUpdatedAt: string, knownUpdatedAt: string): boolean
 }
 
 /**
- * A task leaves the currently loaded list the moment the event's resource is
- * no longer assigned to the user that list was fetched for — reassigning it
- * away must drop it here exactly as a manual refetch would, or the list
- * silently rots for whoever it was just taken from.
+ * Whether `task` still qualifies for the currently loaded `items` page —
+ * both its assignee and its open/closed state have to match what the page
+ * was fetched with (an unset filter admits either).
  */
-function applyEventToItems(
+function belongsOnLoadedList(
+  task: Task,
+  listUserId: string | null,
+  listIsClosed: boolean | undefined,
+): boolean {
+  if (listUserId === null || task.assignedUserId !== listUserId) return false;
+  return listIsClosed === undefined || task.isClosed === listIsClosed;
+}
+
+/**
+ * The single reconciliation rule every list mutation shares, whether the new
+ * task state came back from a REST response or a socket event: a task that
+ * no longer belongs on the loaded page (reassigned away, or closed/reopened
+ * out of the loaded filter) leaves it; one that was never on it is never
+ * inserted just because it changed; one that belongs and is already present
+ * is replaced in place, keeping the list's existing order; one that belongs
+ * and is new to the page is prepended.
+ */
+function reconcileListWithTask(
   items: readonly Task[],
   task: Task,
   listUserId: string | null,
+  listIsClosed: boolean | undefined,
 ): readonly Task[] {
   const isInList = items.some((item) => item.id === task.id);
-  const belongsToList = listUserId !== null && task.assignedUserId === listUserId;
 
-  if (belongsToList) {
+  if (belongsOnLoadedList(task, listUserId, listIsClosed)) {
     return isInList ? replaceTaskInList(items, task) : [task, ...items];
   }
 
@@ -162,7 +183,12 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
     try {
       const page = await taskService.listTasksForUser(userId, options);
       const items = options?.cursor ? [...get().items, ...page.items] : page.items;
-      set({ items, nextCursor: page.nextCursor, listUserId: userId });
+      set({
+        items,
+        nextCursor: page.nextCursor,
+        listUserId: userId,
+        listIsClosed: options?.isClosed,
+      });
       return true;
     } catch (caughtError) {
       return handleTaskRequestFailure(caughtError, set);
@@ -190,7 +216,16 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
 
     try {
       const task = await taskService.createTask(dto);
-      set({ currentTask: task, items: [task, ...get().items] });
+      const { items, listUserId, listIsClosed } = get();
+      set({
+        // Unconditional, unlike the mutations below that only ever touch the
+        // task already open — this only stays correct because the create
+        // trigger is unreachable while the drawer has a task open (its
+        // backdrop blocks it). If that constraint ever lifts, this would
+        // silently swap `currentTask` out from under an open drawer.
+        currentTask: task,
+        items: reconcileListWithTask(items, task, listUserId, listIsClosed),
+      });
       return true;
     } catch (caughtError) {
       return handleTaskRequestFailure(caughtError, set);
@@ -204,7 +239,11 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
 
     try {
       const task = await taskService.changeTaskStatus(taskId, dto);
-      set({ currentTask: task, items: replaceTaskInList(get().items, task) });
+      const { items, listUserId, listIsClosed } = get();
+      set({
+        currentTask: task,
+        items: reconcileListWithTask(items, task, listUserId, listIsClosed),
+      });
       return true;
     } catch (caughtError) {
       return handleTaskRequestFailure(caughtError, set, { taskId, refetchTask: get().fetchTask });
@@ -218,7 +257,11 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
 
     try {
       const task = await taskService.closeTask(taskId);
-      set({ currentTask: task, items: replaceTaskInList(get().items, task) });
+      const { items, listUserId, listIsClosed } = get();
+      set({
+        currentTask: task,
+        items: reconcileListWithTask(items, task, listUserId, listIsClosed),
+      });
       return true;
     } catch (caughtError) {
       return handleTaskRequestFailure(caughtError, set, { taskId, refetchTask: get().fetchTask });
@@ -254,7 +297,7 @@ export const useTaskStore = create<TaskStoreState>()((set, get) => ({
     if (known && isStaleEvent(updatedAt, known.updatedAt)) return;
 
     set({
-      items: applyEventToItems(state.items, task, state.listUserId),
+      items: reconcileListWithTask(state.items, task, state.listUserId, state.listIsClosed),
       currentTask: state.currentTask?.id === task.id ? task : state.currentTask,
     });
   },

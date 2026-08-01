@@ -52,7 +52,13 @@ services:
     restart: 'no'
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Credential-free on purpose, same as .env.example's host-dev DB_URL —
+      # the app composes it with POSTGRES_USER / POSTGRES_PASSWORD below at
+      # read time, percent-encoding as needed, instead of YAML string
+      # interpolation doing it unescaped.
+      DB_URL: postgres://postgres:5432/${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,11 +74,14 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: '3000'
-      DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Credential-free, composed the same way as the migrate service above.
+      DB_URL: postgres://postgres:5432/${POSTGRES_DB}
       DB_READ_URL: ${DB_READ_URL:-}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
       DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-5000}
       DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-2000}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_URL: redis://redis:6379
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       THROTTLE_TTL_SEC: ${THROTTLE_TTL_SEC:-60}

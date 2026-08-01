@@ -55,4 +55,34 @@ describe('StatusStepper', () => {
       expect(screen.getByText('Done').closest('li')).toHaveClass('stepper__step--upcoming');
     });
   });
+
+  describe('Given:the task is open at its final status', () => {
+    it('should still mark that status as the current step', () => {
+      render(<StatusStepper statuses={statuses} currentStatus={3} />);
+
+      expect(screen.getByText('Done').closest('li')).toHaveClass('stepper__step--current');
+      expect(screen.getByText('Done').closest('li')).toHaveAttribute('aria-current', 'step');
+    });
+  });
+
+  describe('Given:the task is closed', () => {
+    it('should leave no step in progress, the status it stopped at included', () => {
+      render(<StatusStepper statuses={statuses} currentStatus={3} isClosed />);
+
+      const steps = screen.getAllByRole('listitem');
+
+      steps.forEach((step) => {
+        expect(step).toHaveClass('stepper__step--done');
+        expect(step).not.toHaveAttribute('aria-current');
+      });
+    });
+
+    it('should leave statuses it never reached upcoming when it stopped short of the end', () => {
+      render(<StatusStepper statuses={statuses} currentStatus={2} isClosed />);
+
+      expect(screen.getByText('Open').closest('li')).toHaveClass('stepper__step--done');
+      expect(screen.getByText('In progress').closest('li')).toHaveClass('stepper__step--done');
+      expect(screen.getByText('Done').closest('li')).toHaveClass('stepper__step--upcoming');
+    });
+  });
 });
