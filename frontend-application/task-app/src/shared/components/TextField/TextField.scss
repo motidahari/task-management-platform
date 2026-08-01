@@ -6,8 +6,8 @@
   width: 100%;
 
   &__label {
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: vars.$font-size-sm;
+    font-weight: vars.$font-weight-semibold;
     color: var(--color-text-secondary);
   }
 
@@ -18,7 +18,7 @@
     border-radius: vars.$radius-sm;
     background-color: var(--color-bg-card);
     color: var(--color-text);
-    font-size: 1rem;
+    font-size: vars.$font-size-md;
     transition: border-color vars.$transition-fast;
 
     &:focus {
@@ -33,13 +33,13 @@
 
   &__counter {
     align-self: flex-end;
-    font-size: 0.75rem;
+    font-size: vars.$font-size-xs;
     color: var(--color-text-secondary);
   }
 
   &__error {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: vars.$font-size-sm;
     color: var(--color-danger);
   }
 }

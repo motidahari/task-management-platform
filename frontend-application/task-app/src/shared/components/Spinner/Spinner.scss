@@ -2,7 +2,7 @@
 
 .spinner {
   display: inline-block;
-  border-radius: 50%;
+  border-radius: vars.$radius-pill;
   border: 2px solid var(--color-border);
   border-top-color: var(--color-primary);
   animation: spinner-rotate 0.8s linear infinite;

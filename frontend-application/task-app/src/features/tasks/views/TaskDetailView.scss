@@ -2,28 +2,55 @@
 @use '../../../styles/mixins';
 
 .task-detail-view {
-  @include mixins.flx($direction: column, $gap: vars.$spacing-lg);
+  &__loading {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+  }
 
-  &--error {
+  &__error {
     @include mixins.flx($direction: column, $align: flex-start, $gap: vars.$spacing-md);
   }
 
-  &__header {
-    @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
-    margin-bottom: vars.$spacing-md;
+  &__error-message {
+    color: var(--color-danger);
   }
 
-  &__title {
-    margin: 0;
-    color: var(--color-text);
+  &__columns {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-xl);
+    align-items: stretch;
+
+    @include mixins.respond(vars.$breakpoint-desktop) {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+  }
+
+  // `align-items: flex-start` keeps the state badge at its own width instead
+  // of stretching it across the column.
+  &__column {
+    @include mixins.flx($direction: column, $align: flex-start, $gap: vars.$spacing-md);
+    min-width: 0;
+  }
+
+  // The activity feed carries far more text than the action panel, so the
+  // split is deliberately uneven rather than 50/50.
+  &__column--left {
+    flex: 3;
+  }
+
+  &__column--right {
+    flex: 2;
   }
 
   &__fields {
-    margin-top: vars.$spacing-md;
+    align-self: stretch;
 
     dl {
       margin: 0;
     }
+  }
+
+  &__history {
+    align-self: stretch;
   }
 
   &__field {
@@ -41,23 +68,30 @@
     }
   }
 
-  &__actions {
-    margin-top: vars.$spacing-lg;
-  }
-
-  &__action-buttons {
-    @include mixins.flx($gap: vars.$spacing-sm, $wrap: wrap);
+  &__mutation {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+    align-self: stretch;
   }
 
   &__form {
     @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+    align-self: stretch;
   }
 
-  &__form-actions {
-    @include mixins.flx($gap: vars.$spacing-sm);
+  &__panel {
+    @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+    align-self: stretch;
+    padding: vars.$spacing-md;
+    border-radius: vars.$radius-md;
+    background-color: var(--color-primary-soft);
   }
 
-  &__error-message {
-    color: var(--color-danger);
+  &__panel-heading {
+    margin: 0;
+    color: var(--color-text);
+  }
+
+  &__action-row {
+    @include mixins.flx($gap: vars.$spacing-sm, $wrap: wrap);
   }
 }

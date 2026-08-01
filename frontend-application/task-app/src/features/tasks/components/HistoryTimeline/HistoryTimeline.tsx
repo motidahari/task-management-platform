@@ -1,11 +1,33 @@
 import type { ReactElement } from 'react';
 
+import { Avatar } from '../../../../shared/components/Avatar';
 import { Button } from '../../../../shared/components/Button';
-import { Spinner } from '../../../../shared/components/Spinner';
+import { Skeleton } from '../../../../shared/components/Skeleton';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
 import type { TaskHistoryEntry } from '../../services/taskService.dto';
 import type { StatusDefinition } from '../../types';
 import './HistoryTimeline.scss';
+
+const RELATIVE_TIME_UNITS: readonly { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
+  { unit: 'year', ms: 365 * 24 * 60 * 60 * 1000 },
+  { unit: 'month', ms: 30 * 24 * 60 * 60 * 1000 },
+  { unit: 'day', ms: 24 * 60 * 60 * 1000 },
+  { unit: 'hour', ms: 60 * 60 * 1000 },
+  { unit: 'minute', ms: 60 * 1000 },
+];
+
+const relativeTimeFormatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+/** The absolute instant stays reachable via the caller's `title` attribute — this only formats the relative label. */
+export function formatRelativeTime(dateIso: string, now: Date = new Date()): string {
+  const elapsedMs = new Date(dateIso).getTime() - now.getTime();
+  const unitEntry = RELATIVE_TIME_UNITS.find(({ ms }) => Math.abs(elapsedMs) >= ms);
+
+  if (!unitEntry) {
+    return relativeTimeFormatter.format(Math.round(elapsedMs / 1000), 'second');
+  }
+  return relativeTimeFormatter.format(Math.round(elapsedMs / unitEntry.ms), unitEntry.unit);
+}
 
 export interface HistoryTimelineProps {
   readonly entries: readonly TaskHistoryEntry[];
@@ -50,9 +72,11 @@ function entryKey(entry: TaskHistoryEntry): string {
 }
 
 /**
- * Read-only, oldest-first audit trail of every transition a task went
+ * Read-only, oldest-first activity feed of every transition a task went
  * through — visible even once the task is closed and every mutating control
- * is gone, since the audit trail outlives the task's mutability.
+ * is gone, since the audit trail outlives the task's mutability. Each entry
+ * carries an avatar seeded by that entry's own assignee, not the task's
+ * current one, so the feed reflects who actually made that transition.
  */
 export function HistoryTimeline({
   entries,
@@ -66,7 +90,7 @@ export function HistoryTimeline({
   const isInitialLoad = isLoading && entries.length === 0;
 
   if (isInitialLoad) {
-    return <Spinner />;
+    return <Skeleton variant="text" count={3} />;
   }
 
   if (entries.length === 0) {
@@ -86,24 +110,35 @@ export function HistoryTimeline({
             className="history-timeline__entry"
             data-testid="history-timeline-entry"
           >
-            <p className="history-timeline__transition">
-              {resolveTransitionLabel(entry, statuses, t)}
-            </p>
-            <p className="history-timeline__meta">
-              {t('assignee-label', { name: resolveAssigneeName(entry.assignedUserId) })}
-            </p>
-            {Object.keys(entry.fieldsSnapshot).length > 0 && (
-              <ul className="history-timeline__fields">
-                {Object.entries(entry.fieldsSnapshot).map(([key, value]) => (
-                  <li key={key}>
-                    {key}: {String(value)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <time className="history-timeline__timestamp" dateTime={entry.createdAt}>
-              {new Date(entry.createdAt).toLocaleString()}
-            </time>
+            <Avatar
+              seed={entry.assignedUserId}
+              alt={resolveAssigneeName(entry.assignedUserId)}
+              size={32}
+            />
+            <div className="history-timeline__body">
+              <p className="history-timeline__transition">
+                {resolveTransitionLabel(entry, statuses, t)}
+              </p>
+              <p className="history-timeline__meta">
+                {t('assignee-label', { name: resolveAssigneeName(entry.assignedUserId) })}
+              </p>
+              {Object.keys(entry.fieldsSnapshot).length > 0 && (
+                <ul className="history-timeline__fields">
+                  {Object.entries(entry.fieldsSnapshot).map(([key, value]) => (
+                    <li key={key}>
+                      {key}: {String(value)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <time
+                className="history-timeline__timestamp"
+                dateTime={entry.createdAt}
+                title={new Date(entry.createdAt).toLocaleString()}
+              >
+                {formatRelativeTime(entry.createdAt)}
+              </time>
+            </div>
           </li>
         ))}
       </ol>

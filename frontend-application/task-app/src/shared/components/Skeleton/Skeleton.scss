@@ -1,0 +1,52 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.skeleton-group {
+  @include mixins.flx($direction: column, $align: flex-start, $gap: vars.$spacing-xs);
+  width: 100%;
+}
+
+.skeleton {
+  display: block;
+  width: 100%;
+  border-radius: vars.$radius-sm;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-subtle) 50%,
+    var(--color-bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+
+  &--text {
+    height: vars.$font-size-md;
+  }
+
+  &--block {
+    height: vars.$spacing-xl * 3;
+    border-radius: vars.$radius-md;
+  }
+
+  &--circle {
+    width: vars.$spacing-xl;
+    height: vars.$spacing-xl;
+    border-radius: vars.$radius-pill;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
+import { bus } from '../../../../core/bus/bus';
 import type { CurrentUserStoreState } from '../../stores/useCurrentUserStore';
 import { useCurrentUserStore } from '../../stores/useCurrentUserStore';
 import type { TaskStoreState } from '../../stores/useTaskStore';
@@ -103,6 +104,17 @@ describe('CreateTaskForm', () => {
     });
   });
 
+  describe('Given:the assignee picker is open', () => {
+    it('should render an avatar beside each assignee option', () => {
+      render(<CreateTaskForm />);
+
+      fireEvent.click(screen.getByLabelText('create-task-form.assignee-label'));
+
+      const option = screen.getByRole('option', { name: 'Alice' });
+      expect(within(option).getByRole('img', { hidden: true })).toBeInTheDocument();
+    });
+  });
+
   describe('Given:a type and an assignee are picked', () => {
     it('should enable the submit button', () => {
       render(<CreateTaskForm />);
@@ -114,8 +126,10 @@ describe('CreateTaskForm', () => {
   });
 
   describe('Given:a valid submission succeeds', () => {
-    it('should create the task, clear the form, and show a success toast', async () => {
+    it('should create the task, clear the form, show a success toast, and close the modal', async () => {
       createTask.mockResolvedValueOnce(true);
+      const modalCloseHandler = vi.fn();
+      const unsubscribe = bus.on('modal:close', modalCloseHandler);
       render(<CreateTaskForm />);
 
       pickTypeAndAssignee();
@@ -132,12 +146,16 @@ describe('CreateTaskForm', () => {
           'create-task-form.type-placeholder',
         ),
       );
+      expect(modalCloseHandler).toHaveBeenCalledTimes(1);
+      unsubscribe();
     });
   });
 
   describe('Given:a valid submission fails', () => {
-    it('should keep the picked values and not show a success toast', async () => {
+    it('should keep the picked values, not show a success toast, and not close the modal', async () => {
       createTask.mockResolvedValueOnce(false);
+      const modalCloseHandler = vi.fn();
+      const unsubscribe = bus.on('modal:close', modalCloseHandler);
       render(<CreateTaskForm />);
 
       pickTypeAndAssignee();
@@ -146,6 +164,8 @@ describe('CreateTaskForm', () => {
       await vi.waitFor(() => expect(createTask).toHaveBeenCalledTimes(1));
       expect(toastSuccessMock).not.toHaveBeenCalled();
       expect(screen.getByLabelText('create-task-form.type-label')).toHaveTextContent('Development');
+      expect(modalCloseHandler).not.toHaveBeenCalled();
+      unsubscribe();
     });
   });
 });

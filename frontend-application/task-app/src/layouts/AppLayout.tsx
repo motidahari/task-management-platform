@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Outlet } from 'react-router';
 
+import { MODAL_REGISTRY } from '../core/modals/modalRegistry';
 import { ModalHost } from '../shared/components/Modal';
 import { ThemeToggle } from '../shared/components/ThemeToggle';
 import { ToastHost } from '../shared/components/Toast';
@@ -19,14 +20,16 @@ export function AppLayout(): ReactElement {
   return (
     <div className="app-layout">
       <header className="app-layout__header">
-        <h1 className="app-layout__title">{t('title')}</h1>
+        <span className="app-layout__wordmark">{t('title')}</span>
         <ThemeToggle />
       </header>
       <main className="app-layout__content">
-        <Outlet />
+        <div className="app-layout__container">
+          <Outlet />
+        </div>
       </main>
       <ToastHost />
-      <ModalHost />
+      <ModalHost registry={MODAL_REGISTRY} />
     </div>
   );
 }

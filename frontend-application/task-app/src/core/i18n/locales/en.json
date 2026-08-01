@@ -26,10 +26,16 @@
   "modal": {
     "close-button-label": "Close"
   },
+  "drawer": {
+    "close-button-label": "Close"
+  },
   "toast": {
     "dismiss-button-label": "Dismiss"
   },
   "spinner": {
+    "loading-label": "Loading"
+  },
+  "skeleton": {
     "loading-label": "Loading"
   },
   "avatar": {
@@ -59,25 +65,35 @@
     "load-more-button": "Load more"
   },
   "task-detail-view": {
-    "closed-badge": "Closed",
+    "title-fallback": "Task",
+    "state-open": "Open",
+    "state-closed": "Closed",
     "fields-heading": "Details",
     "no-fields-message": "No details recorded for this status.",
-    "advance-button": "Advance",
-    "reverse-button": "Reverse",
+    "history-heading": "History",
+    "next-status-heading": "Advance to {{status}}",
+    "final-status-title": "This is the final status.",
+    "final-status-description": "There's nowhere further to advance — close the task below.",
+    "advance-button": "Move forward",
+    "reverse-button": "Move backward",
     "close-button": "Close task",
-    "submit-button": "Submit",
     "cancel-button": "Cancel",
     "close-confirm-title": "Close this task?",
     "close-confirm-message": "This can't be undone. The task will be marked closed.",
     "close-confirm-button": "Close task",
-    "retry-button": "Retry",
-    "history-heading": "History"
-  },
-  "task-card": {
-    "closed-badge": "Closed",
-    "assignee-label": "Assigned to {{name}}"
+    "retry-button": "Retry"
   },
   "task-list": {
+    "table-caption": "Your tasks",
+    "id-column": "ID",
+    "type-column": "Type",
+    "status-column": "Status",
+    "state-column": "State",
+    "assignee-column": "Assignee",
+    "status-badge": "{{status}}: {{statusName}}",
+    "closed-badge": "Closed",
+    "state-open": "Open",
+    "state-closed": "Closed",
     "empty-state": "No tasks yet.",
     "load-more-button": "Load more"
   },
@@ -91,12 +107,16 @@
     "success-toast": "Task created."
   },
   "my-tasks-view": {
+    "gate-title": "Who's working today?",
+    "gate-error-title": "We couldn't load the user list.",
+    "gate-retry-button": "Retry",
+    "connect-button": "Connect",
     "user-picker-label": "Viewing tasks for",
     "user-picker-placeholder": "Select a user",
     "filter-label": "Status",
     "filter-open": "Open",
     "filter-closed": "Closed",
-    "select-user-prompt": "Select a user to see their tasks."
+    "create-task-button": "Create task"
   },
   "shared-errors": {
     "generic": "Something went wrong. Please try again.",

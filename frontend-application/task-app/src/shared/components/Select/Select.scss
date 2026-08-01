@@ -6,8 +6,8 @@
   width: 100%;
 
   &__label {
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: vars.$font-size-sm;
+    font-weight: vars.$font-weight-semibold;
     color: var(--color-text-secondary);
   }
 
@@ -45,6 +45,7 @@
   }
 
   &__value {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -69,10 +70,11 @@
     border: 1px solid var(--color-border);
     border-radius: vars.$radius-sm;
     background-color: var(--color-bg-card);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 25%);
+    box-shadow: var(--shadow-md);
   }
 
   &__option {
+    @include mixins.flx($align: center, $gap: vars.$spacing-sm);
     padding: vars.$spacing-sm;
     color: var(--color-text);
     cursor: pointer;
@@ -87,9 +89,13 @@
     }
   }
 
+  &__option-icon {
+    flex-shrink: 0;
+  }
+
   &__error {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: vars.$font-size-sm;
     color: var(--color-danger);
   }
 }

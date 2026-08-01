@@ -12,13 +12,18 @@
   }
 
   &__entry {
+    @include mixins.flx($gap: vars.$spacing-sm);
     padding: vars.$spacing-sm vars.$spacing-md;
     border-inline-start: 2px solid var(--color-border);
   }
 
+  &__body {
+    min-width: 0;
+  }
+
   &__transition {
     margin: 0;
-    font-weight: 700;
+    font-weight: vars.$font-weight-semibold;
     color: var(--color-text);
   }
 
@@ -36,7 +41,7 @@
   &__timestamp {
     display: block;
     margin-top: vars.$spacing-xs;
-    font-size: 0.85rem;
+    font-size: vars.$font-size-sm;
     color: var(--color-text-secondary);
   }
 

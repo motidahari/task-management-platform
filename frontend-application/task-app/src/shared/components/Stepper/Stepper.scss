@@ -1,0 +1,87 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.stepper {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  &--horizontal {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  // Stacked: the connector is a rail dropped from the circle's centre down to
+  // the next one, so it stays put however many lines a label wraps to.
+  &__step {
+    @include mixins.flx($align: flex-start, $gap: vars.$spacing-sm);
+    position: relative;
+    padding-block-end: vars.$spacing-md;
+    color: var(--color-text-secondary);
+
+    &:last-child {
+      padding-block-end: 0;
+    }
+
+    &:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      inset-inline-start: calc(#{vars.$spacing-lg} / 2 - 1px);
+      top: vars.$spacing-lg;
+      bottom: 0;
+      width: 2px;
+      background-color: var(--color-border);
+    }
+  }
+
+  &--horizontal &__step {
+    align-items: center;
+    flex: 1;
+    position: static;
+    padding-block-end: 0;
+
+    &:not(:last-child)::after {
+      position: static;
+      width: auto;
+      height: 2px;
+      flex: 1;
+      align-self: center;
+    }
+  }
+
+  &__circle {
+    @include mixins.flx($justify: center, $align: center);
+    flex-shrink: 0;
+    width: vars.$spacing-lg;
+    height: vars.$spacing-lg;
+    border-radius: vars.$radius-pill;
+    border: 2px solid var(--color-border);
+    font-size: vars.$font-size-xs;
+    font-weight: vars.$font-weight-semibold;
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg-card);
+  }
+
+  &__label {
+    font-size: vars.$font-size-sm;
+  }
+
+  &__step--current {
+    color: var(--color-text);
+    font-weight: vars.$font-weight-semibold;
+
+    .stepper__circle {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+  }
+
+  &__step--done {
+    .stepper__circle {
+      border-color: var(--color-success);
+      background-color: var(--color-success-soft);
+      color: var(--color-success);
+    }
+  }
+}

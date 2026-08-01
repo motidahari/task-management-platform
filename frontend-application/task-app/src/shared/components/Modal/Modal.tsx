@@ -2,32 +2,14 @@ import type { ReactElement, ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon } from '../Icon';
+import { cycleFocusWithinDialog } from '../utils/focusTrap';
 import './Modal.scss';
 
 export interface ModalProps {
   readonly title: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
-}
-
-const FOCUSABLE_SELECTOR =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
-function cycleFocusWithinDialog(event: KeyboardEvent, dialog: HTMLElement): void {
-  if (event.key !== 'Tab') return;
-
-  const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (!first || !last) return;
-
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
 }
 
 /**
@@ -75,7 +57,7 @@ export function Modal({ title, onClose, children }: ModalProps): ReactElement {
             onClick={onClose}
             aria-label={t('close-button-label')}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
         <div className="modal__body">{children}</div>

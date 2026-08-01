@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
@@ -213,6 +213,28 @@ describe('Select', () => {
 
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Type')).toBeDisabled();
+    });
+  });
+
+  describe('Given:options with an icon field', () => {
+    const optionsWithIcon = [
+      { value: 'a', label: 'Option A', icon: <svg data-testid="option-a-icon" /> },
+      { value: 'b', label: 'Option B' },
+    ];
+
+    it('should render the icon before the label in the option row', () => {
+      renderSelect({ options: optionsWithIcon });
+
+      fireEvent.click(screen.getByLabelText('Type'));
+
+      const optionA = screen.getByRole('option', { name: 'Option A' });
+      expect(within(optionA).getByTestId('option-a-icon')).toBeInTheDocument();
+    });
+
+    it('should render the selected option’s icon in the trigger', () => {
+      renderSelect({ options: optionsWithIcon, value: 'a' });
+
+      expect(screen.getByTestId('option-a-icon')).toBeInTheDocument();
     });
   });
 });

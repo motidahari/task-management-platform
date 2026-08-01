@@ -1,0 +1,81 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.drawer {
+  @include mixins.flx($direction: column);
+  height: 100vh;
+  overflow-y: auto;
+  background-color: var(--color-bg-card);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  animation: drawer-slide-in vars.$transition-normal;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &--md {
+    width: min(480px, 100vw);
+  }
+
+  // Wide enough for a two-column body to stay two columns on a laptop
+  // rather than collapsing back to a single stacked column.
+  &--lg {
+    width: min(920px, 100vw);
+  }
+
+  &__backdrop {
+    @include mixins.flx($justify: flex-end);
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background-color: var(--color-backdrop);
+  }
+
+  &__header {
+    @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
+    padding: vars.$spacing-md vars.$spacing-lg;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: vars.$font-size-lg;
+    color: var(--color-text);
+  }
+
+  &__close {
+    min-width: 32px;
+    min-height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: vars.$font-size-lg;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  &__body {
+    flex: 1;
+    padding: vars.$spacing-lg;
+  }
+
+  &__footer {
+    padding: vars.$spacing-md vars.$spacing-lg;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}

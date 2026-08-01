@@ -3,7 +3,20 @@ import type { ReactElement } from 'react';
 
 import { useBus } from '../../../core/bus/useBus';
 import { Button } from '../Button';
-import { ModalHost } from './ModalHost';
+import { Modal } from './Modal';
+import { ConfirmModal } from './ConfirmModal';
+import { ModalHost, type ModalHostProps } from './ModalHost';
+
+// Stands in for the app's own registry so the catalogue entry stays free of
+// feature screens.
+const storyRegistry: ModalHostProps['registry'] = {
+  confirm: ConfirmModal,
+  'create-task': ({ onClose }) => (
+    <Modal title="Create task" onClose={onClose}>
+      <p>The feature supplies this content in the running app.</p>
+    </Modal>
+  ),
+};
 
 function ModalHostDemo(): ReactElement {
   const { emit } = useBus();
@@ -21,10 +34,17 @@ function ModalHostDemo(): ReactElement {
     });
   }
 
+  function openCreateTaskModal(): void {
+    emit('modal:open', { id: 'create-task', props: {} });
+  }
+
   return (
     <>
       <Button onClick={openConfirmModal}>Open confirm modal</Button>
-      <ModalHost />
+      <Button variant="secondary" onClick={openCreateTaskModal}>
+        Open create-task modal
+      </Button>
+      <ModalHost registry={storyRegistry} />
     </>
   );
 }
@@ -41,9 +61,12 @@ const meta = {
       story: { inline: false, height: '420px' },
       description: {
         component:
-          'The single active modal, global to the app and mounted exactly once by `AppLayout`. No feature ever renders a modal directly — it emits `modal:open` with a registered id and typed props, and this host looks up the matching content component from `MODAL_REGISTRY`.',
+          'The single active modal, global to the app and mounted exactly once by `AppLayout`. No feature ever renders a modal directly — it emits `modal:open` with a registered id and typed props, and this host looks up the matching content component in the registry the app hands it.',
       },
     },
+  },
+  args: {
+    registry: storyRegistry,
   },
 } satisfies Meta<typeof ModalHost>;
 

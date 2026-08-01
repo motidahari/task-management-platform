@@ -3,8 +3,10 @@
 
 .modal {
   width: min(480px, 90vw);
-  max-height: 85vh;
-  overflow-y: auto;
+  // Deliberately not a scroll container: a dropdown opened inside the dialog
+  // is positioned against it, and clipping here would cut the options off.
+  // Tall content scrolls the backdrop instead.
+  margin: vars.$spacing-xl 0;
   border-radius: vars.$radius-md;
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
@@ -18,7 +20,8 @@
     position: fixed;
     inset: 0;
     z-index: 1100;
-    background-color: rgb(0 0 0 / 50%);
+    overflow-y: auto;
+    background-color: var(--color-backdrop);
   }
 
   &__header {
@@ -29,7 +32,7 @@
 
   &__title {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: vars.$font-size-lg;
     color: var(--color-text);
   }
 
@@ -39,7 +42,7 @@
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    font-size: 1.25rem;
+    font-size: vars.$font-size-lg;
     line-height: 1;
     cursor: pointer;
   }

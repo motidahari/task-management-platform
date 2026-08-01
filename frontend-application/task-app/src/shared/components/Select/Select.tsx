@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent, ReactElement } from 'react';
+import type { KeyboardEvent, MouseEvent, ReactElement, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
 import './Select.scss';
@@ -6,6 +6,8 @@ import './Select.scss';
 export interface SelectOption {
   readonly value: string;
   readonly label: string;
+  /** Rendered before the label in both the trigger and the option row; omitted renders nothing. */
+  readonly icon?: ReactNode;
 }
 
 export interface SelectProps {
@@ -192,6 +194,11 @@ export function Select({
           onKeyDown={handleTriggerKeyDown}
           onBlur={handleTriggerBlur}
         >
+          {selectedOption?.icon && (
+            <span className="select__option-icon" aria-hidden="true">
+              {selectedOption.icon}
+            </span>
+          )}
           <span className="select__value">{selectedOption?.label ?? placeholder ?? ''}</span>
           <span className="select__chevron" aria-hidden="true">
             ▾
@@ -225,6 +232,11 @@ export function Select({
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectOption(option)}
               >
+                {option.icon && (
+                  <span className="select__option-icon" aria-hidden="true">
+                    {option.icon}
+                  </span>
+                )}
                 {option.label}
               </li>
             ))}

@@ -1,8 +1,23 @@
 @use '../../../styles/variables' as vars;
 
 .card {
-  padding: vars.$spacing-lg;
   border: 1px solid var(--color-border);
   border-radius: vars.$radius-md;
   background-color: var(--color-bg-card);
+
+  &--padding-none {
+    padding: 0;
+  }
+
+  &--padding-sm {
+    padding: vars.$spacing-md;
+  }
+
+  &--padding-md {
+    padding: vars.$spacing-lg;
+  }
+
+  &--raised {
+    box-shadow: var(--shadow-md);
+  }
 }
