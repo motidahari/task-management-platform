@@ -32,6 +32,9 @@
   "spinner": {
     "loading-label": "Loading"
   },
+  "avatar": {
+    "default-alt-label": "User avatar"
+  },
   "theme-toggle": {
     "light-mode-label": "Light",
     "dark-mode-label": "Dark",
