@@ -103,6 +103,7 @@ export function TaskDetailView(): ReactElement {
   const fetchTask = useTaskStore((state) => state.fetchTask);
   const fetchTaskHistory = useTaskStore((state) => state.fetchTaskHistory);
   const taskTypeDefinitions = useTaskTypeStore((state) => state.definitions);
+  const loadTaskTypes = useTaskTypeStore((state) => state.loadTaskTypes);
   const users = useCurrentUserStore((state) => state.users);
   const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
   const lifecycle = useTaskLifecycle();
@@ -116,6 +117,15 @@ export function TaskDetailView(): ReactElement {
   }, [taskId, fetchTask]);
 
   const closeDrawer = useCallback(() => void navigate('/'), [navigate]);
+
+  // An unresolved type means the metadata itself is stale or incomplete, not
+  // the task — refetching the task alone could never fix it, so this reloads
+  // the definitions the same way `TaskTypesGate` does, alongside the task in
+  // case its `type` field was also wrong.
+  const retryTypeResolution = useCallback(() => {
+    void loadTaskTypes();
+    refetch();
+  }, [loadTaskTypes, refetch]);
 
   useTaskRealtime({ mode: 'detail', taskId }, refetch);
 
@@ -163,6 +173,12 @@ export function TaskDetailView(): ReactElement {
     [taskTypeDefinitions, currentTask],
   );
   const statuses = taskTypeDef?.statuses ?? [];
+  // Covers both an unknown type and one that resolved with an empty
+  // `statuses` array — either way there is no workflow to derive actions
+  // from, so this is checked once and used to swap the whole action column
+  // for an explicit error instead of leaving `canAdvance`/`canReverse`/
+  // `canClose` silently false.
+  const isTypeMetadataUnresolved = statuses.length === 0;
   const currentStatusIndex = currentTask ? findStatusIndex(statuses, currentTask.status) : -1;
   const nextStatusDef = currentStatusIndex >= 0 ? statuses[currentStatusIndex + 1] : undefined;
   const canAdvance = Boolean(nextStatusDef);
@@ -301,77 +317,105 @@ export function TaskDetailView(): ReactElement {
         </div>
 
         <div className="task-detail-view__column task-detail-view__column--right">
-          <StatusStepper statuses={statuses} currentStatus={currentTask.status} />
+          {isTypeMetadataUnresolved ? (
+            <div className="task-detail-view__type-error" role="alert">
+              <EmptyState
+                icon="alert"
+                title={t('type-unresolved-title', { type: currentTask.type })}
+                description={t('type-unresolved-description')}
+                action={
+                  <Button onClick={retryTypeResolution} testId="task-detail-view-type-error-retry">
+                    {t('retry-button')}
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <>
+              <StatusStepper
+                statuses={statuses}
+                currentStatus={currentTask.status}
+                isClosed={currentTask.isClosed}
+              />
 
-          {!currentTask.isClosed && (
-            <section className="task-detail-view__mutation" data-testid="task-detail-view-actions">
-              <form
-                className="task-detail-view__form"
-                data-testid="advance-form"
-                onSubmit={(event) => void submitAdvance(event)}
-              >
-                {nextStatusDef ? (
-                  <div className="task-detail-view__panel">
-                    <h3 className="task-detail-view__panel-heading">
-                      {t('next-status-heading', { status: nextStatusDef.displayName })}
-                    </h3>
-                    <DynamicFieldsForm
-                      descriptors={nextStatusDef.requiredFields}
-                      values={customFieldValues}
-                      onChange={(key, value) =>
-                        setCustomFieldValues((current) => ({ ...current, [key]: value }))
-                      }
-                      missingFields={missingFieldKeys}
+              {!currentTask.isClosed && (
+                <section
+                  className="task-detail-view__mutation"
+                  data-testid="task-detail-view-actions"
+                >
+                  <form
+                    className="task-detail-view__form"
+                    data-testid="advance-form"
+                    onSubmit={(event) => void submitAdvance(event)}
+                  >
+                    {nextStatusDef ? (
+                      <div className="task-detail-view__panel">
+                        <h3 className="task-detail-view__panel-heading">
+                          {t('next-status-heading', { status: nextStatusDef.displayName })}
+                        </h3>
+                        <DynamicFieldsForm
+                          descriptors={nextStatusDef.requiredFields}
+                          values={customFieldValues}
+                          onChange={(key, value) =>
+                            setCustomFieldValues((current) => ({ ...current, [key]: value }))
+                          }
+                          missingFields={missingFieldKeys}
+                          disabled={lifecycle.isSubmitting}
+                        />
+                      </div>
+                    ) : (
+                      <EmptyState
+                        icon="check"
+                        title={t('final-status-title')}
+                        description={t('final-status-description')}
+                      />
+                    )}
+
+                    <AssigneeSelect
+                      value={nextAssignedUserId}
+                      options={assigneeOptions}
+                      onChange={setNextAssignedUserId}
                       disabled={lifecycle.isSubmitting}
                     />
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon="check"
-                    title={t('final-status-title')}
-                    description={t('final-status-description')}
-                  />
-                )}
 
-                <AssigneeSelect
-                  value={nextAssignedUserId}
-                  options={assigneeOptions}
-                  onChange={setNextAssignedUserId}
-                  disabled={lifecycle.isSubmitting}
-                />
-
-                {/* Only the moves this task can actually make are offered:
-                    a permanently dead control reads as a broken screen. */}
-                <div className="task-detail-view__action-row">
-                  {canAdvance && (
-                    <Button type="submit" loading={lifecycle.isSubmitting} testId="advance-submit">
-                      {t('advance-button')}
-                    </Button>
-                  )}
-                  {canReverse && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void handleReverseClick()}
-                      disabled={lifecycle.isSubmitting}
-                      testId="reverse-submit"
-                    >
-                      {t('reverse-button')}
-                    </Button>
-                  )}
-                  {canClose && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      onClick={handleCloseClick}
-                      testId="close-button"
-                    >
-                      {t('close-button')}
-                    </Button>
-                  )}
-                </div>
-              </form>
-            </section>
+                    {/* Only the moves this task can actually make are offered:
+                        a permanently dead control reads as a broken screen. */}
+                    <div className="task-detail-view__action-row">
+                      {canAdvance && (
+                        <Button
+                          type="submit"
+                          loading={lifecycle.isSubmitting}
+                          testId="advance-submit"
+                        >
+                          {t('advance-button')}
+                        </Button>
+                      )}
+                      {canReverse && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => void handleReverseClick()}
+                          disabled={lifecycle.isSubmitting}
+                          testId="reverse-submit"
+                        >
+                          {t('reverse-button')}
+                        </Button>
+                      )}
+                      {canClose && (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          onClick={handleCloseClick}
+                          testId="close-button"
+                        >
+                          {t('close-button')}
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </section>
+              )}
+            </>
           )}
         </div>
       </div>

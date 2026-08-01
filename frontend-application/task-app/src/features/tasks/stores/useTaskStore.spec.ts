@@ -75,6 +75,8 @@ describe('useTaskStore', () => {
       expect(useTaskStore.getState()).toMatchObject({
         items: [task],
         nextCursor: 'cursor-1',
+        listUserId: 'u-1',
+        listIsClosed: false,
         isLoading: false,
         error: null,
       });
@@ -113,39 +115,167 @@ describe('useTaskStore', () => {
   });
 
   describe('Given:creating a task succeeds', () => {
-    it('should prepend the created task to the list and set it as current', async () => {
-      const existing = buildTask({ id: 't-0' });
-      useTaskStore.setState({ items: [existing] });
-      const created = buildTask({ id: 't-1' });
-      const dto: CreateTaskDto = { type: 'development', assignedUserId: 'u-1' };
-      createTaskMock.mockResolvedValueOnce(created);
+    describe('When:the created task belongs on the currently loaded list', () => {
+      it('should prepend it to the list and set it as current', async () => {
+        const existing = buildTask({ id: 't-0', assignedUserId: 'u-1', isClosed: false });
+        useTaskStore.setState({ items: [existing], listUserId: 'u-1', listIsClosed: false });
+        const created = buildTask({ id: 't-1', assignedUserId: 'u-1', isClosed: false });
+        const dto: CreateTaskDto = { type: 'development', assignedUserId: 'u-1' };
+        createTaskMock.mockResolvedValueOnce(created);
 
-      const result = await useTaskStore.getState().createTask(dto);
+        const result = await useTaskStore.getState().createTask(dto);
 
-      expect(result).toBe(true);
-      expect(useTaskStore.getState().items).toEqual([created, existing]);
-      expect(useTaskStore.getState().currentTask).toEqual(created);
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([created, existing]);
+        expect(useTaskStore.getState().currentTask).toEqual(created);
+      });
+    });
+
+    describe('When:the created task is assigned to a different user than the loaded list', () => {
+      it('should not add it to the list but should still set it as current', async () => {
+        const existing = buildTask({ id: 't-0', assignedUserId: 'u-1', isClosed: false });
+        useTaskStore.setState({ items: [existing], listUserId: 'u-1', listIsClosed: false });
+        const created = buildTask({ id: 't-1', assignedUserId: 'u-2', isClosed: false });
+        const dto: CreateTaskDto = { type: 'development', assignedUserId: 'u-2' };
+        createTaskMock.mockResolvedValueOnce(created);
+
+        const result = await useTaskStore.getState().createTask(dto);
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([existing]);
+        expect(useTaskStore.getState().currentTask).toEqual(created);
+      });
+    });
+
+    describe('When:the created task does not match the loaded closed filter', () => {
+      it('should not add it to the list but should still set it as current', async () => {
+        const existing = buildTask({ id: 't-0', assignedUserId: 'u-1', isClosed: true });
+        useTaskStore.setState({ items: [existing], listUserId: 'u-1', listIsClosed: true });
+        const created = buildTask({ id: 't-1', assignedUserId: 'u-1', isClosed: false });
+        const dto: CreateTaskDto = { type: 'development', assignedUserId: 'u-1' };
+        createTaskMock.mockResolvedValueOnce(created);
+
+        const result = await useTaskStore.getState().createTask(dto);
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([existing]);
+        expect(useTaskStore.getState().currentTask).toEqual(created);
+      });
     });
   });
 
   describe('Given:changing a task’s status succeeds', () => {
-    it('should replace the task in the list and set it as current from the response body', async () => {
-      const before = buildTask({ status: 1 });
-      const after = buildTask({ status: 2, statusName: 'in-progress' });
-      useTaskStore.setState({ items: [before] });
-      const dto: ChangeTaskStatusDto = {
-        direction: 'forward',
-        expectedStatus: 1,
-        nextAssignedUserId: 'u-2',
-      };
-      changeTaskStatusMock.mockResolvedValueOnce(after);
+    describe('When:the change keeps the task within the loaded filter', () => {
+      it('should replace the task in the list and set it as current from the response body', async () => {
+        const before = buildTask({ status: 1, assignedUserId: 'u-1', isClosed: false });
+        const after = buildTask({
+          status: 2,
+          statusName: 'in-progress',
+          assignedUserId: 'u-1',
+          isClosed: false,
+        });
+        useTaskStore.setState({ items: [before], listUserId: 'u-1', listIsClosed: false });
+        const dto: ChangeTaskStatusDto = {
+          direction: 'forward',
+          expectedStatus: 1,
+          nextAssignedUserId: 'u-1',
+        };
+        changeTaskStatusMock.mockResolvedValueOnce(after);
 
-      const result = await useTaskStore.getState().changeTaskStatus('t-1', dto);
+        const result = await useTaskStore.getState().changeTaskStatus('t-1', dto);
 
-      expect(result).toBe(true);
-      expect(useTaskStore.getState().items).toEqual([after]);
-      expect(useTaskStore.getState().currentTask).toEqual(after);
-      expect(emitMock).not.toHaveBeenCalled();
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([after]);
+        expect(useTaskStore.getState().currentTask).toEqual(after);
+        expect(emitMock).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('When:the list has multiple items and a middle one is replaced', () => {
+      it('should keep every task’s position, replacing only the changed one in place', async () => {
+        const first = buildTask({ id: 't-1', assignedUserId: 'u-1', isClosed: false });
+        const second = buildTask({ id: 't-2', assignedUserId: 'u-1', isClosed: false });
+        const third = buildTask({ id: 't-3', assignedUserId: 'u-1', isClosed: false });
+        useTaskStore.setState({
+          items: [first, second, third],
+          listUserId: 'u-1',
+          listIsClosed: false,
+        });
+        const updatedSecond = buildTask({
+          id: 't-2',
+          status: 2,
+          statusName: 'in-progress',
+          assignedUserId: 'u-1',
+          isClosed: false,
+        });
+        const dto: ChangeTaskStatusDto = {
+          direction: 'forward',
+          expectedStatus: 1,
+          nextAssignedUserId: 'u-1',
+        };
+        changeTaskStatusMock.mockResolvedValueOnce(updatedSecond);
+
+        const result = await useTaskStore.getState().changeTaskStatus('t-2', dto);
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([first, updatedSecond, third]);
+      });
+    });
+
+    describe('When:the list has multiple items and the last one is replaced', () => {
+      it('should keep every task’s position, replacing only the changed one in place', async () => {
+        const first = buildTask({ id: 't-1', assignedUserId: 'u-1', isClosed: false });
+        const second = buildTask({ id: 't-2', assignedUserId: 'u-1', isClosed: false });
+        const third = buildTask({ id: 't-3', assignedUserId: 'u-1', isClosed: false });
+        useTaskStore.setState({
+          items: [first, second, third],
+          listUserId: 'u-1',
+          listIsClosed: false,
+        });
+        const updatedThird = buildTask({
+          id: 't-3',
+          status: 2,
+          statusName: 'in-progress',
+          assignedUserId: 'u-1',
+          isClosed: false,
+        });
+        const dto: ChangeTaskStatusDto = {
+          direction: 'forward',
+          expectedStatus: 1,
+          nextAssignedUserId: 'u-1',
+        };
+        changeTaskStatusMock.mockResolvedValueOnce(updatedThird);
+
+        const result = await useTaskStore.getState().changeTaskStatus('t-3', dto);
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([first, second, updatedThird]);
+      });
+    });
+
+    describe('When:the change reassigns the task off the loaded list', () => {
+      it('should drop the task from the list while still setting it as current', async () => {
+        const before = buildTask({ status: 1, assignedUserId: 'u-1', isClosed: false });
+        const after = buildTask({
+          status: 2,
+          statusName: 'in-progress',
+          assignedUserId: 'u-2',
+          isClosed: false,
+        });
+        useTaskStore.setState({ items: [before], listUserId: 'u-1', listIsClosed: false });
+        const dto: ChangeTaskStatusDto = {
+          direction: 'forward',
+          expectedStatus: 1,
+          nextAssignedUserId: 'u-2',
+        };
+        changeTaskStatusMock.mockResolvedValueOnce(after);
+
+        const result = await useTaskStore.getState().changeTaskStatus('t-1', dto);
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([]);
+        expect(useTaskStore.getState().currentTask).toEqual(after);
+      });
     });
   });
 
@@ -197,16 +327,33 @@ describe('useTaskStore', () => {
   });
 
   describe('Given:closing a task succeeds', () => {
-    it('should replace the task in the list with the closed resource', async () => {
-      const before = buildTask({ isClosed: false });
-      const closed = buildTask({ isClosed: true });
-      useTaskStore.setState({ items: [before] });
-      closeTaskMock.mockResolvedValueOnce(closed);
+    describe('When:the loaded list is viewing the closed filter', () => {
+      it('should replace the task in the list with the closed resource', async () => {
+        const before = buildTask({ assignedUserId: 'u-1', isClosed: false });
+        const closed = buildTask({ assignedUserId: 'u-1', isClosed: true });
+        useTaskStore.setState({ items: [before], listUserId: 'u-1', listIsClosed: true });
+        closeTaskMock.mockResolvedValueOnce(closed);
 
-      const result = await useTaskStore.getState().closeTask('t-1');
+        const result = await useTaskStore.getState().closeTask('t-1');
 
-      expect(result).toBe(true);
-      expect(useTaskStore.getState().items).toEqual([closed]);
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([closed]);
+      });
+    });
+
+    describe('When:the loaded list is viewing the open filter', () => {
+      it('should drop the task from the list while still setting it as current', async () => {
+        const before = buildTask({ assignedUserId: 'u-1', isClosed: false });
+        const closed = buildTask({ assignedUserId: 'u-1', isClosed: true });
+        useTaskStore.setState({ items: [before], listUserId: 'u-1', listIsClosed: false });
+        closeTaskMock.mockResolvedValueOnce(closed);
+
+        const result = await useTaskStore.getState().closeTask('t-1');
+
+        expect(result).toBe(true);
+        expect(useTaskStore.getState().items).toEqual([]);
+        expect(useTaskStore.getState().currentTask).toEqual(closed);
+      });
     });
   });
 
@@ -304,6 +451,7 @@ describe('useTaskStore', () => {
         nextCursor: 'cursor-1',
         currentTask: buildTask(),
         listUserId: 'u-1',
+        listIsClosed: false,
         historyItems: [
           {
             fromStatus: null,
@@ -324,6 +472,7 @@ describe('useTaskStore', () => {
         nextCursor: null,
         currentTask: null,
         listUserId: null,
+        listIsClosed: undefined,
         historyItems: [],
         historyNextCursor: null,
         isLoading: false,
@@ -375,6 +524,74 @@ describe('useTaskStore', () => {
       });
     });
 
+    describe('When:the list has multiple items and a middle one is replaced by an event', () => {
+      it('should keep every task’s position, replacing only the changed one in place', () => {
+        const first = buildTask({
+          id: 't-1',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        const second = buildTask({
+          id: 't-2',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        const third = buildTask({
+          id: 't-3',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        useTaskStore.setState({ items: [first, second, third], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({
+            id: 't-2',
+            status: 2,
+            statusName: 'in-progress',
+            assignedUserId: 'u-1',
+            updatedAt: '2026-01-01T00:00:01.000000Z',
+          }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([first, payload.task, third]);
+      });
+    });
+
+    describe('When:the list has multiple items and the last one is replaced by an event', () => {
+      it('should keep every task’s position, replacing only the changed one in place', () => {
+        const first = buildTask({
+          id: 't-1',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        const second = buildTask({
+          id: 't-2',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        const third = buildTask({
+          id: 't-3',
+          assignedUserId: 'u-1',
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        useTaskStore.setState({ items: [first, second, third], listUserId: 'u-1' });
+        const payload = buildEventPayload(
+          buildTask({
+            id: 't-3',
+            status: 2,
+            statusName: 'in-progress',
+            assignedUserId: 'u-1',
+            updatedAt: '2026-01-01T00:00:01.000000Z',
+          }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([first, second, payload.task]);
+      });
+    });
+
     describe('When:the event reassigns a task away from the currently loaded list', () => {
       it('should drop it from items', () => {
         const existing = buildTask({
@@ -389,6 +606,34 @@ describe('useTaskStore', () => {
         useTaskStore.getState().applyTaskEvent(payload);
 
         expect(useTaskStore.getState().items).toEqual([]);
+      });
+    });
+
+    describe('When:the event closes a task while the loaded list is viewing the open filter', () => {
+      it('should drop it from items but still update currentTask', () => {
+        const existing = buildTask({
+          assignedUserId: 'u-1',
+          isClosed: false,
+          updatedAt: '2026-01-01T00:00:00.000000Z',
+        });
+        useTaskStore.setState({
+          items: [existing],
+          listUserId: 'u-1',
+          listIsClosed: false,
+          currentTask: existing,
+        });
+        const payload = buildEventPayload(
+          buildTask({
+            assignedUserId: 'u-1',
+            isClosed: true,
+            updatedAt: '2026-01-01T00:00:01.000000Z',
+          }),
+        );
+
+        useTaskStore.getState().applyTaskEvent(payload);
+
+        expect(useTaskStore.getState().items).toEqual([]);
+        expect(useTaskStore.getState().currentTask).toEqual(payload.task);
       });
     });
 
