@@ -7,9 +7,12 @@
   "scripts": {
     "dev": "vite --force",
     "build": "vite build",
-    "lint": "eslint src",
+    "lint": "eslint src .storybook",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "preview-storybook": "vite preview --outDir storybook-static --port 6007"
   },
   "dependencies": {
     "@core/shared": "^0.1.0",
@@ -24,6 +27,10 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^10.5.5",
+    "@storybook/addon-docs": "^10.5.5",
+    "@storybook/addon-themes": "^10.5.5",
+    "@storybook/react-vite": "^10.5.5",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
@@ -32,6 +39,7 @@
     "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "sass": "^1.102.0",
+    "storybook": "^10.5.5",
     "vite": "8.1.5",
     "vitest": "^4.1.10"
   }
