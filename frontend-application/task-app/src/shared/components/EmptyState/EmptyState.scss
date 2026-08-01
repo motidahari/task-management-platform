@@ -1,0 +1,28 @@
+@use '../../../styles/variables' as vars;
+@use '../../../styles/mixins';
+
+.empty-state {
+  @include mixins.flx($direction: column, $justify: center, $align: center, $gap: vars.$spacing-sm);
+  padding: vars.$spacing-xl;
+  text-align: center;
+
+  &__icon {
+    color: var(--color-text-secondary);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: vars.$font-size-md;
+    font-weight: vars.$font-weight-medium;
+    color: var(--color-text);
+  }
+
+  &__description {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
+
+  &__action {
+    margin-top: vars.$spacing-xs;
+  }
+}

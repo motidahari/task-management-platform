@@ -12,6 +12,7 @@ export interface ModalPropsMap {
     readonly cancelLabel: string;
     readonly onConfirm: () => void;
   };
+  readonly 'create-task': Record<string, never>;
 }
 
 export type ModalOpenEvent = {

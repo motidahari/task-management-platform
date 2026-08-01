@@ -78,3 +78,24 @@ export const Disabled: Story = {
     disabled: true,
   },
 };
+
+export const WithOptionIcon: Story = {
+  args: {
+    value: 'feature',
+    options: options.map((option) => ({
+      ...option,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="currentColor" />
+        </svg>
+      ),
+    })),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Each option carries a leading icon, rendered in both the trigger and the rows.',
+      },
+    },
+  },
+};

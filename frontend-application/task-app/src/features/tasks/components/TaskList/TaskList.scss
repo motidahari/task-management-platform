@@ -3,15 +3,14 @@
 
 .task-list {
   @include mixins.flx($direction: column, $align: flex-start, $gap: vars.$spacing-md);
-}
-
-.task-list__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: vars.$spacing-md;
   width: 100%;
 }
 
-.task-list__empty {
-  color: var(--color-text-secondary);
+.task-list__id {
+  font-family: monospace;
+}
+
+.task-list__type,
+.task-list__assignee {
+  @include mixins.flx($align: center, $gap: vars.$spacing-sm);
 }

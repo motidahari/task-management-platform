@@ -26,7 +26,15 @@ describe('StatusStepper', () => {
       const steps = screen.getAllByRole('listitem');
 
       expect(steps).toHaveLength(3);
-      expect(steps.map((step) => step.textContent)).toEqual(['Open', 'In progress', 'Done']);
+      expect(steps.map((step) => step.textContent)).toEqual(['✓Open', '2In progress', '3Done']);
+    });
+
+    it('should compose the shared Stepper vertically', () => {
+      render(<StatusStepper statuses={statuses} currentStatus={2} />);
+
+      expect(screen.getByRole('list', { name: 'status-stepper.aria-label' })).toHaveClass(
+        'stepper--vertical',
+      );
     });
   });
 
@@ -39,12 +47,12 @@ describe('StatusStepper', () => {
       expect(screen.getByText('Done').closest('li')).not.toHaveAttribute('aria-current');
     });
 
-    it('should mark earlier statuses as completed and later ones as upcoming', () => {
+    it('should mark earlier statuses as done and later ones as upcoming', () => {
       render(<StatusStepper statuses={statuses} currentStatus={2} />);
 
-      expect(screen.getByText('Open')).toHaveClass('badge--success');
-      expect(screen.getByText('In progress')).toHaveClass('badge--info');
-      expect(screen.getByText('Done')).toHaveClass('badge--neutral');
+      expect(screen.getByText('Open').closest('li')).toHaveClass('stepper__step--done');
+      expect(screen.getByText('In progress').closest('li')).toHaveClass('stepper__step--current');
+      expect(screen.getByText('Done').closest('li')).toHaveClass('stepper__step--upcoming');
     });
   });
 });

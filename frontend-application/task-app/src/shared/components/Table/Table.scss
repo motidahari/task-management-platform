@@ -1,0 +1,58 @@
+@use '../../../styles/variables' as vars;
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: vars.$font-size-sm;
+  color: var(--color-text);
+
+  &__header-cell {
+    padding: vars.$spacing-sm vars.$spacing-md;
+    text-align: left;
+    font-weight: vars.$font-weight-semibold;
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg-subtle);
+    border-bottom: 1px solid var(--color-border);
+
+    &--end {
+      text-align: right;
+    }
+  }
+
+  &__row {
+    border-bottom: 1px solid var(--color-border);
+
+    &--selectable {
+      cursor: pointer;
+
+      &:hover {
+        background-color: var(--color-bg-subtle);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: -2px;
+      }
+
+      &[aria-selected='true'] {
+        background-color: var(--color-bg-subtle);
+        box-shadow: inset 2px 0 0 var(--color-border-strong);
+      }
+    }
+  }
+
+  &__cell {
+    padding: vars.$spacing-sm vars.$spacing-md;
+    text-align: left;
+
+    &--end {
+      text-align: right;
+    }
+  }
+
+  &__empty-cell {
+    padding: vars.$spacing-xl;
+    text-align: center;
+    color: var(--color-text-secondary);
+  }
+}

@@ -7,8 +7,8 @@
   border-radius: vars.$radius-sm;
   background-color: var(--color-bg-elevated);
   color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: vars.$font-size-sm;
+  font-weight: vars.$font-weight-semibold;
   cursor: pointer;
   transition: background-color vars.$transition-fast;
 

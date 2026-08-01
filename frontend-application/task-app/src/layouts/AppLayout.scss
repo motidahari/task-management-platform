@@ -1,19 +1,26 @@
 @use '../styles/variables' as vars;
 @use '../styles/mixins';
 
+// The product bar and its content canvas aren't part of the shared spacing
+// scale — this is the one place a page-level container width is declared.
+$container-max-width: 72rem;
+
 .app-layout {
   @include mixins.flx($direction: column);
   min-height: 100%;
+  background-color: var(--color-bg);
 
   &__header {
     @include mixins.flx($justify: space-between, $align: center, $gap: vars.$spacing-md);
     padding: vars.$spacing-md vars.$spacing-lg;
     border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-bg-card);
   }
 
-  &__title {
+  &__wordmark {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: vars.$font-size-lg;
+    font-weight: vars.$font-weight-semibold;
     color: var(--color-text);
   }
 
@@ -24,5 +31,10 @@
     @include mixins.respond(vars.$breakpoint-desktop) {
       padding: vars.$spacing-xl;
     }
+  }
+
+  &__container {
+    max-width: $container-max-width;
+    margin: 0 auto;
   }
 }

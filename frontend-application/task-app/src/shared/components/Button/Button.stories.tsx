@@ -17,7 +17,7 @@ const meta = {
   argTypes: {
     variant: {
       control: { type: 'select' },
-      options: ['primary', 'secondary', 'danger'],
+      options: ['primary', 'secondary', 'danger', 'ghost'],
     },
     type: {
       control: { type: 'select' },
@@ -50,6 +50,26 @@ export const Danger: Story = {
   args: {
     variant: 'danger',
     children: 'Delete',
+  },
+};
+
+export const Ghost: Story = {
+  args: {
+    variant: 'ghost',
+    children: 'Cancel',
+  },
+};
+
+export const WithIcon: Story = {
+  args: {
+    icon: 'plus',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'A named `Icon` rendered before the label — Button owns its sizing.',
+      },
+    },
   },
 };
 

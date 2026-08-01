@@ -133,9 +133,8 @@ describe('TaskDetailView', () => {
       );
 
       renderTaskDetailView();
-      fireEvent.click(await screen.findByTestId('advance-button'));
 
-      expect(screen.getByTestId('dynamic-fields-form')).toBeInTheDocument();
+      expect(await screen.findByTestId('dynamic-fields-form')).toBeInTheDocument();
       fireEvent.click(screen.getByLabelText('assignee-select.label'));
       await waitFor(() => expect(screen.getByRole('option', { name: 'u-2' })).toBeInTheDocument());
 
@@ -157,7 +156,7 @@ describe('TaskDetailView', () => {
   });
 
   describe('Given:advancing fails with a stale expectedStatus (TASK_STATE_CONFLICT)', () => {
-    it('should refetch the task and close the advance form on the true state', async () => {
+    it('should refetch the task and rebuild the advance panel for the true state', async () => {
       getTaskMock.mockResolvedValueOnce(buildTask({ status: 1 }));
       changeTaskStatusMock.mockRejectedValueOnce({
         errorCode: ErrorCode.TASK_STATE_CONFLICT,
@@ -168,14 +167,16 @@ describe('TaskDetailView', () => {
       getTaskMock.mockResolvedValueOnce(buildTask({ status: 2, statusName: 'in-progress' }));
 
       renderTaskDetailView();
-      fireEvent.click(await screen.findByTestId('advance-button'));
-      fireEvent.change(screen.getByLabelText('Branch name'), {
+      fireEvent.change(await screen.findByLabelText('Branch name'), {
         target: { value: 'feature/login' },
       });
       fireEvent.click(screen.getByTestId('advance-submit'));
 
       await waitFor(() => expect(getTaskMock).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(screen.queryByTestId('advance-form')).not.toBeInTheDocument());
+      // The refetched task is now at `in-progress`, whose next status ('done')
+      // requires no fields — the stale `branchName` input, and whatever was
+      // typed into it, is gone rather than lingering on the true state.
+      await waitFor(() => expect(screen.queryByLabelText('Branch name')).not.toBeInTheDocument());
     });
   });
 
@@ -190,8 +191,7 @@ describe('TaskDetailView', () => {
       });
 
       renderTaskDetailView();
-      fireEvent.click(await screen.findByTestId('advance-button'));
-      fireEvent.change(screen.getByLabelText('Branch name'), { target: { value: 'x' } });
+      fireEvent.change(await screen.findByLabelText('Branch name'), { target: { value: 'x' } });
       fireEvent.click(screen.getByLabelText('assignee-select.label'));
       fireEvent.click(screen.getByRole('option', { name: 'u-1' }));
       fireEvent.click(screen.getByTestId('advance-submit'));
@@ -203,17 +203,18 @@ describe('TaskDetailView', () => {
   });
 
   describe('Given:the task is not yet at its final status', () => {
-    it('should disable the close button', async () => {
+    it('should not offer the close action', async () => {
       getTaskMock.mockResolvedValueOnce(buildTask({ status: 1 }));
 
       renderTaskDetailView();
 
-      expect(await screen.findByTestId('close-button')).toBeDisabled();
+      expect(await screen.findByTestId('advance-submit')).toBeInTheDocument();
+      expect(screen.queryByTestId('close-button')).not.toBeInTheDocument();
     });
   });
 
   describe('Given:the task is at its final status and not closed', () => {
-    it('should enable the close button and close the task once the confirmation is accepted', async () => {
+    it('should offer the close action and close the task once the confirmation is accepted', async () => {
       getTaskMock.mockResolvedValueOnce(buildTask({ status: 3, statusName: 'done' }));
       closeTaskMock.mockResolvedValueOnce(
         buildTask({ status: 3, statusName: 'done', isClosed: true }),
@@ -292,7 +293,6 @@ describe('TaskDetailView', () => {
       });
 
       renderTaskDetailView();
-      fireEvent.click(await screen.findByTestId('advance-button'));
 
       expect(
         await screen.findByText('history-timeline.assignee-label:{"name":"Alice"}'),

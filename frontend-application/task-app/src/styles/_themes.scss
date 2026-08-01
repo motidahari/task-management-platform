@@ -1,29 +1,56 @@
 // Runtime theming: compile-time SCSS variables can't switch at runtime, so
-// colors live here as CSS custom properties and are consumed everywhere via
-// var(--color-*). useThemeStore (later task) stamps data-theme on <html>;
-// index.html defaults to 'dark' until that store lands.
+// anything carrying a color lives here as a CSS custom property and is
+// consumed everywhere via var(). useThemeStore stamps data-theme on <html>.
+// Both blocks must declare the identical token names — a token defined in
+// only one theme renders as an unresolved var() in the other.
 :root[data-theme='dark'] {
-  --color-bg: #1d2125;
-  --color-bg-card: #22272b;
-  --color-bg-elevated: #282e33;
-  --color-border: #38414a;
+  --color-bg: #14181d;
+  --color-bg-card: #1d2125;
+  --color-bg-elevated: #262b31;
+  --color-bg-subtle: #21262c;
+  --color-border: #333b43;
+  --color-border-strong: #4c5966;
   --color-text: #dee4ea;
   --color-text-secondary: #8c9bab;
   --color-primary: #579dff;
   --color-primary-hover: #85b8ff;
-  --color-danger: #f87168;
+  --color-primary-soft: #1c2b41;
+  --color-success: #4bce97;
+  --color-success-soft: #1a3129;
   --color-warning: #f5cd47;
+  --color-warning-soft: #3a2f14;
+  --color-danger: #f87168;
+  --color-danger-soft: #3d201f;
+  --color-on-accent: #14181d;
+  --color-backdrop: rgb(0 0 0 / 65%);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 45%);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 55%);
 }
 
 :root[data-theme='light'] {
-  --color-bg: #f7f8f9;
+  --color-bg: #f4f7fb;
   --color-bg-card: #ffffff;
-  --color-bg-elevated: #f1f2f4;
-  --color-border: #dcdfe4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #f1f4f9;
+  --color-border: #e3e8ef;
+  --color-border-strong: #c3cbd6;
   --color-text: #172b4d;
   --color-text-secondary: #626f86;
-  --color-primary: #0c66e4;
-  --color-primary-hover: #0055cc;
+  --color-primary: #1868db;
+  --color-primary-hover: #0d5bc4;
+  --color-primary-soft: #e4eefc;
+  --color-success: #1f845a;
+  --color-success-soft: #dcf5e9;
+  --color-warning: #b45309;
+  --color-warning-soft: #fdf0d8;
   --color-danger: #c9372c;
-  --color-warning: #e56910;
+  --color-danger-soft: #fbe4e2;
+  --color-on-accent: #ffffff;
+  --color-backdrop: rgb(9 30 66 / 45%);
+
+  --shadow-sm: 0 1px 2px rgb(9 30 66 / 8%);
+  --shadow-md: 0 4px 12px rgb(9 30 66 / 12%);
+  --shadow-lg: 0 12px 32px rgb(9 30 66 / 18%);
 }

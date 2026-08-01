@@ -7,15 +7,16 @@ import {
   type ReactElement,
 } from 'react';
 import { useTranslation as useI18nTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 
 import { useBus } from '../../../core/bus/useBus';
 import type { ApiError } from '../../../core/types/api-error';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
-import { Card } from '../../../shared/components/Card';
+import { Drawer } from '../../../shared/components/Drawer';
+import { EmptyState } from '../../../shared/components/EmptyState';
 import type { SelectOption } from '../../../shared/components/Select';
-import { Spinner } from '../../../shared/components/Spinner';
+import { Skeleton } from '../../../shared/components/Skeleton';
 import { useTranslation } from '../../../shared/hooks/useTranslation';
 import { resolveErrorText } from '../../../shared/utils/resolveErrorText';
 import { AssigneeSelect } from '../components/AssigneeSelect';
@@ -33,8 +34,6 @@ import { useTaskStore } from '../stores/useTaskStore';
 import { useTaskTypeStore } from '../stores/useTaskTypeStore';
 import type { StatusDefinition, Task, TaskTypeDefinition, User } from '../types';
 import './TaskDetailView.scss';
-
-type ActiveAction = 'advance' | 'reverse' | null;
 
 /**
  * Task/history payloads carry only an assignee id, by contract — this is the
@@ -80,15 +79,18 @@ function extractMissingFields(error: ApiError | null): readonly string[] {
 }
 
 /**
- * The task's stepper, read-only fields, advance/reverse/close controls, and
- * its audit-trail timeline, all wired to one task's live state. Every
- * mutation (via `useTaskLifecycle`) already carries `expectedStatus`, so a
- * stale conflict resolves itself: the store refetches, `currentTask` changes,
- * and the effect below closes whatever form was open and lands the screen on
- * the true state — no bespoke conflict handling lives in this component.
+ * A route-driven drawer over the still-mounted task table: the stepper, the
+ * task's read-only saved fields, its audit-trail timeline, and the
+ * always-visible next-status panel — advance/reverse/close all wired to one
+ * task's live state. Every mutation (via `useTaskLifecycle`) already carries
+ * `expectedStatus`, so a stale conflict resolves itself: the store
+ * refetches, `currentTask` changes, and the effect below clears whatever was
+ * entered and lands the screen on the true state — no bespoke conflict
+ * handling lives here.
  */
 export function TaskDetailView(): ReactElement {
   const taskId = useParams<{ taskId: string }>().taskId ?? '';
+  const navigate = useNavigate();
   const { t } = useTranslation('task-detail-view');
   const { t: translateRaw } = useI18nTranslation();
   const { emit } = useBus();
@@ -105,7 +107,6 @@ export function TaskDetailView(): ReactElement {
   const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
   const lifecycle = useTaskLifecycle();
 
-  const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [customFieldValues, setCustomFieldValues] = useState<DynamicFieldsFormValues>({});
   const [nextAssignedUserId, setNextAssignedUserId] = useState('');
   const [missingFieldKeys, setMissingFieldKeys] = useState<readonly string[]>([]);
@@ -114,13 +115,25 @@ export function TaskDetailView(): ReactElement {
     if (taskId !== '') void fetchTask(taskId);
   }, [taskId, fetchTask]);
 
+  const closeDrawer = useCallback(() => void navigate('/'), [navigate]);
+
   useTaskRealtime({ mode: 'detail', taskId }, refetch);
 
   useEffect(() => {
     if (taskId === '') return;
     void fetchTask(taskId);
+  }, [taskId, fetchTask]);
+
+  // Every transition appends to the audit trail, so the timeline follows the
+  // loaded task's state rather than only its id: it arrives with the first
+  // load and refreshes on any later move, including one made elsewhere and
+  // delivered over the socket.
+  const loadedStatus = currentTask?.status;
+  const loadedIsClosed = currentTask?.isClosed;
+  useEffect(() => {
+    if (taskId === '' || loadedStatus === undefined) return;
     void fetchTaskHistory(taskId);
-  }, [taskId, fetchTask, fetchTaskHistory]);
+  }, [taskId, loadedStatus, loadedIsClosed, fetchTaskHistory]);
 
   // A user landing here directly (rather than via `MyTasksView`) has no
   // directory loaded yet; one arriving from the picker already does, so this
@@ -130,22 +143,20 @@ export function TaskDetailView(): ReactElement {
   }, [users.length, fetchUsers]);
 
   // A task change (a successful mutation, or the auto-refetch that follows a
-  // TASK_STATE_CONFLICT) always makes whatever form was open stale — closing
-  // it here means neither success nor conflict recovery needs its own
-  // bespoke "now close the form" call.
+  // TASK_STATE_CONFLICT) always makes whatever was entered stale — the next
+  // status, and so its required fields, may no longer be the same one, so
+  // this is the one place both the entered values and any missing-field
+  // highlight get cleared, for either recovery path.
   useEffect(() => {
-    setActiveAction(null);
     setCustomFieldValues({});
     setMissingFieldKeys([]);
     setNextAssignedUserId(currentTask?.assignedUserId ?? '');
   }, [currentTask?.id, currentTask?.status]);
 
-  // `details.missing` only ever applies to the fields of the advance form —
-  // reverse and close carry no submitted fields to highlight.
+  // `details.missing` only ever applies to the advance panel's fields.
   useEffect(() => {
-    if (activeAction !== 'advance') return;
     setMissingFieldKeys(extractMissingFields(error));
-  }, [error, activeAction]);
+  }, [error]);
 
   const taskTypeDef = useMemo(
     () => (currentTask ? findTaskType(taskTypeDefinitions, currentTask.type) : undefined),
@@ -175,19 +186,6 @@ export function TaskDetailView(): ReactElement {
         : [],
     [currentTask, historyAssigneeIds, resolveAssigneeName],
   );
-
-  function openAdvance(): void {
-    setActiveAction('advance');
-  }
-
-  function openReverse(): void {
-    setActiveAction('reverse');
-  }
-
-  function cancelAction(): void {
-    setActiveAction(null);
-    setMissingFieldKeys([]);
-  }
 
   function handleCloseClick(): void {
     if (!currentTask) return;
@@ -223,8 +221,7 @@ export function TaskDetailView(): ReactElement {
     });
   }
 
-  async function submitReverse(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function handleReverseClick(): Promise<void> {
     if (!currentTask || nextAssignedUserId === '') return;
 
     await lifecycle.reverse({
@@ -239,156 +236,145 @@ export function TaskDetailView(): ReactElement {
     void fetchTaskHistory(taskId, { cursor: historyNextCursor });
   }
 
-  if (!currentTask && isLoading) {
-    return <Spinner />;
-  }
-
-  if (!currentTask && error) {
+  if (!currentTask) {
     return (
-      <div className="task-detail-view task-detail-view--error" role="alert">
-        <p className="task-detail-view__error-message">{resolveErrorText(error, translateRaw)}</p>
-        <Button onClick={refetch} testId="task-detail-view-retry">
-          {t('retry-button')}
-        </Button>
-      </div>
+      <Drawer title={t('title-fallback')} onClose={closeDrawer} testId="task-detail-view">
+        {error ? (
+          <div className="task-detail-view__error" role="alert">
+            <p className="task-detail-view__error-message">
+              {resolveErrorText(error, translateRaw)}
+            </p>
+            <Button onClick={refetch} testId="task-detail-view-retry">
+              {t('retry-button')}
+            </Button>
+          </div>
+        ) : (
+          <div className="task-detail-view__loading" data-testid="task-detail-view-loading">
+            <Skeleton variant="text" width="50%" />
+            <Skeleton variant="block" height={140} />
+            <Skeleton variant="text" count={3} />
+          </div>
+        )}
+      </Drawer>
     );
   }
 
-  if (!currentTask) {
-    return <Spinner />;
-  }
-
   return (
-    <div className="task-detail-view" data-testid="task-detail-view">
-      <Card testId="task-detail-view-card">
-        <header className="task-detail-view__header">
-          <h2 className="task-detail-view__title">
-            {taskTypeDef?.displayName ?? currentTask.type}
-          </h2>
-          {currentTask.isClosed && <Badge>{t('closed-badge')}</Badge>}
-        </header>
+    <Drawer
+      title={taskTypeDef?.displayName ?? currentTask.type}
+      onClose={closeDrawer}
+      testId="task-detail-view"
+    >
+      <div className="task-detail-view__columns">
+        <div className="task-detail-view__column task-detail-view__column--left">
+          <Badge variant={currentTask.isClosed ? 'neutral' : 'success'}>
+            {currentTask.isClosed ? t('state-closed') : t('state-open')}
+          </Badge>
 
-        <StatusStepper statuses={statuses} currentStatus={currentTask.status} />
-
-        <section aria-label={t('fields-heading')} className="task-detail-view__fields">
-          <h3>{t('fields-heading')}</h3>
-          {Object.keys(currentTask.customFields).length === 0 ? (
-            <p>{t('no-fields-message')}</p>
-          ) : (
-            <dl>
-              {Object.entries(currentTask.customFields).map(([key, value]) => (
-                <div className="task-detail-view__field" key={key}>
-                  <dt>{key}</dt>
-                  <dd>{String(value)}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-        </section>
-
-        {!currentTask.isClosed && (
-          <section className="task-detail-view__actions" data-testid="task-detail-view-actions">
-            {activeAction === null && (
-              <div className="task-detail-view__action-buttons">
-                <Button onClick={openAdvance} disabled={!canAdvance} testId="advance-button">
-                  {t('advance-button')}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={openReverse}
-                  disabled={!canReverse}
-                  testId="reverse-button"
-                >
-                  {t('reverse-button')}
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={handleCloseClick}
-                  disabled={!canClose}
-                  testId="close-button"
-                >
-                  {t('close-button')}
-                </Button>
-              </div>
+          <section aria-label={t('fields-heading')} className="task-detail-view__fields">
+            <h3>{t('fields-heading')}</h3>
+            {Object.keys(currentTask.customFields).length === 0 ? (
+              <p>{t('no-fields-message')}</p>
+            ) : (
+              <dl>
+                {Object.entries(currentTask.customFields).map(([key, value]) => (
+                  <div className="task-detail-view__field" key={key}>
+                    <dt>{key}</dt>
+                    <dd>{String(value)}</dd>
+                  </div>
+                ))}
+              </dl>
             )}
+          </section>
 
-            {activeAction === 'advance' && nextStatusDef && (
+          <section aria-label={t('history-heading')} className="task-detail-view__history">
+            <h3>{t('history-heading')}</h3>
+            <HistoryTimeline
+              entries={historyItems}
+              statuses={statuses}
+              hasMore={historyNextCursor !== null}
+              isLoading={isLoading}
+              onLoadMore={handleLoadMoreHistory}
+              resolveAssigneeName={resolveAssigneeName}
+            />
+          </section>
+        </div>
+
+        <div className="task-detail-view__column task-detail-view__column--right">
+          <StatusStepper statuses={statuses} currentStatus={currentTask.status} />
+
+          {!currentTask.isClosed && (
+            <section className="task-detail-view__mutation" data-testid="task-detail-view-actions">
               <form
                 className="task-detail-view__form"
                 data-testid="advance-form"
                 onSubmit={(event) => void submitAdvance(event)}
               >
-                <DynamicFieldsForm
-                  descriptors={nextStatusDef.requiredFields}
-                  values={customFieldValues}
-                  onChange={(key, value) =>
-                    setCustomFieldValues((current) => ({ ...current, [key]: value }))
-                  }
-                  missingFields={missingFieldKeys}
-                  disabled={lifecycle.isSubmitting}
-                />
+                {nextStatusDef ? (
+                  <div className="task-detail-view__panel">
+                    <h3 className="task-detail-view__panel-heading">
+                      {t('next-status-heading', { status: nextStatusDef.displayName })}
+                    </h3>
+                    <DynamicFieldsForm
+                      descriptors={nextStatusDef.requiredFields}
+                      values={customFieldValues}
+                      onChange={(key, value) =>
+                        setCustomFieldValues((current) => ({ ...current, [key]: value }))
+                      }
+                      missingFields={missingFieldKeys}
+                      disabled={lifecycle.isSubmitting}
+                    />
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon="check"
+                    title={t('final-status-title')}
+                    description={t('final-status-description')}
+                  />
+                )}
+
                 <AssigneeSelect
                   value={nextAssignedUserId}
                   options={assigneeOptions}
                   onChange={setNextAssignedUserId}
                   disabled={lifecycle.isSubmitting}
                 />
-                <div className="task-detail-view__form-actions">
-                  <Button type="submit" loading={lifecycle.isSubmitting} testId="advance-submit">
-                    {t('submit-button')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={cancelAction}
-                    disabled={lifecycle.isSubmitting}
-                  >
-                    {t('cancel-button')}
-                  </Button>
+
+                {/* Only the moves this task can actually make are offered:
+                    a permanently dead control reads as a broken screen. */}
+                <div className="task-detail-view__action-row">
+                  {canAdvance && (
+                    <Button type="submit" loading={lifecycle.isSubmitting} testId="advance-submit">
+                      {t('advance-button')}
+                    </Button>
+                  )}
+                  {canReverse && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleReverseClick()}
+                      disabled={lifecycle.isSubmitting}
+                      testId="reverse-submit"
+                    >
+                      {t('reverse-button')}
+                    </Button>
+                  )}
+                  {canClose && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={handleCloseClick}
+                      testId="close-button"
+                    >
+                      {t('close-button')}
+                    </Button>
+                  )}
                 </div>
               </form>
-            )}
-
-            {activeAction === 'reverse' && (
-              <form
-                className="task-detail-view__form"
-                data-testid="reverse-form"
-                onSubmit={(event) => void submitReverse(event)}
-              >
-                <AssigneeSelect
-                  value={nextAssignedUserId}
-                  options={assigneeOptions}
-                  onChange={setNextAssignedUserId}
-                  disabled={lifecycle.isSubmitting}
-                />
-                <div className="task-detail-view__form-actions">
-                  <Button type="submit" loading={lifecycle.isSubmitting} testId="reverse-submit">
-                    {t('submit-button')}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={cancelAction}
-                    disabled={lifecycle.isSubmitting}
-                  >
-                    {t('cancel-button')}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </section>
-        )}
-      </Card>
-
-      <Card testId="task-detail-view-history-card">
-        <h3>{t('history-heading')}</h3>
-        <HistoryTimeline
-          entries={historyItems}
-          statuses={statuses}
-          hasMore={historyNextCursor !== null}
-          isLoading={isLoading}
-          onLoadMore={handleLoadMoreHistory}
-          resolveAssigneeName={resolveAssigneeName}
-        />
-      </Card>
-    </div>
+            </section>
+          )}
+        </div>
+      </div>
+    </Drawer>
   );
 }

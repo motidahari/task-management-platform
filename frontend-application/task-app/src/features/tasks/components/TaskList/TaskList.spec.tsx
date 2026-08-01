@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { Task } from '../../types';
@@ -13,7 +13,7 @@ vi.mock('../../../../shared/hooks/useTranslation', () => ({
 
 function buildTask(overrides: Partial<Task> = {}): Task {
   return {
-    id: 't-1',
+    id: 't-1234567890',
     type: 'development',
     status: 1,
     statusName: 'created',
@@ -27,10 +27,14 @@ function buildTask(overrides: Partial<Task> = {}): Task {
 }
 
 describe('TaskList', () => {
+  const resolveStatusDisplayName = (_type: string, status: number): string =>
+    status === 2 ? 'Specification completed' : `Status ${status}`;
+
   let onSelectTask: Mock<(taskId: string) => void>;
   let onLoadMore: Mock<() => void>;
 
   const resolveAssigneeName = (userId: string): string => userId;
+  const resolveTypeDisplayName = (type: string): string => type;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,7 +43,7 @@ describe('TaskList', () => {
   });
 
   describe('Given:the initial load is in flight and nothing is loaded yet', () => {
-    it('should render the loading indicator instead of the empty state', () => {
+    it('should render the table in its own loading state instead of the empty state', () => {
       render(
         <TaskList
           tasks={[]}
@@ -48,10 +52,12 @@ describe('TaskList', () => {
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
           resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
         />,
       );
 
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getByRole('table')).toBeInTheDocument();
       expect(screen.queryByText('task-list.empty-state')).not.toBeInTheDocument();
     });
   });
@@ -66,6 +72,8 @@ describe('TaskList', () => {
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
           resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
         />,
       );
 
@@ -74,59 +82,103 @@ describe('TaskList', () => {
   });
 
   describe('Given:a loaded page of tasks', () => {
-    it('should render one card per task', () => {
-      const tasks = [buildTask({ id: 't-1' }), buildTask({ id: 't-2' })];
+    it('should render one row per task with its id prefix, type, status, state and assignee', () => {
+      const task = buildTask({
+        id: 't-1234567890',
+        type: 'development',
+        status: 2,
+        statusName: 'in-progress',
+        isClosed: false,
+        assignedUserId: 'u-1',
+      });
 
       render(
         <TaskList
-          tasks={tasks}
-          isLoading={false}
-          hasMore={false}
-          onSelectTask={onSelectTask}
-          onLoadMore={onLoadMore}
-          resolveAssigneeName={resolveAssigneeName}
-        />,
-      );
-
-      expect(screen.getAllByTestId('task-card')).toHaveLength(2);
-    });
-
-    it('should emit the clicked task id upward', () => {
-      const tasks = [buildTask({ id: 't-1' })];
-
-      render(
-        <TaskList
-          tasks={tasks}
-          isLoading={false}
-          hasMore={false}
-          onSelectTask={onSelectTask}
-          onLoadMore={onLoadMore}
-          resolveAssigneeName={resolveAssigneeName}
-        />,
-      );
-
-      fireEvent.click(screen.getByTestId('task-card-t-1'));
-
-      expect(onSelectTask).toHaveBeenCalledWith('t-1');
-    });
-  });
-
-  describe('Given:a resolver that maps assignee ids to names', () => {
-    it('should pass each task’s resolved assignee name to its card', () => {
-      const tasks = [buildTask({ id: 't-1', assignedUserId: 'u-1' })];
-
-      render(
-        <TaskList
-          tasks={tasks}
+          tasks={[task]}
           isLoading={false}
           hasMore={false}
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
           resolveAssigneeName={() => 'Alice'}
+          resolveTypeDisplayName={() => 'Development'}
+          resolveStatusDisplayName={resolveStatusDisplayName}
         />,
       );
 
-      expect(screen.getByText('task-card.assignee-label:{"name":"Alice"}')).toBeInTheDocument();
+      const row = screen.getByText('Development').closest('tr') as HTMLElement;
+      expect(within(row).getByTitle('t-1234567890')).toHaveTextContent('t-123456');
+      expect(
+        within(row).getByText(
+          'task-list.status-badge:{"status":2,"statusName":"Specification completed"}',
+        ),
+      ).toBeInTheDocument();
+      expect(within(row).getByText('task-list.state-open')).toBeInTheDocument();
+      expect(within(row).getByText('Alice')).toBeInTheDocument();
+    });
+
+    it('should render the closed label and closed state badge for a closed task', () => {
+      const task = buildTask({ isClosed: true, statusName: 'done' });
+
+      render(
+        <TaskList
+          tasks={[task]}
+          isLoading={false}
+          hasMore={false}
+          onSelectTask={onSelectTask}
+          onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
+        />,
+      );
+
+      expect(screen.getByText('task-list.closed-badge')).toBeInTheDocument();
+      expect(screen.getByText('task-list.state-closed')).toBeInTheDocument();
+      expect(screen.queryByText('done')).not.toBeInTheDocument();
+    });
+
+    it('should emit the clicked task id upward', () => {
+      const task = buildTask({ id: 't-1' });
+
+      render(
+        <TaskList
+          tasks={[task]}
+          isLoading={false}
+          hasMore={false}
+          onSelectTask={onSelectTask}
+          onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
+        />,
+      );
+
+      fireEvent.click(screen.getByTitle('t-1'));
+
+      expect(onSelectTask).toHaveBeenCalledWith('t-1');
+    });
+  });
+
+  describe('Given:a selectedTaskId matching a row', () => {
+    it('should mark that row selected', () => {
+      const task = buildTask({ id: 't-1' });
+
+      render(
+        <TaskList
+          tasks={[task]}
+          isLoading={false}
+          hasMore={false}
+          onSelectTask={onSelectTask}
+          onLoadMore={onLoadMore}
+          resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
+          selectedTaskId="t-1"
+        />,
+      );
+
+      const row = screen.getByTitle('t-1').closest('tr');
+      expect(row).toHaveAttribute('aria-selected', 'true');
     });
   });
 
@@ -140,6 +192,8 @@ describe('TaskList', () => {
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
           resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
         />,
       );
 
@@ -159,6 +213,8 @@ describe('TaskList', () => {
           onSelectTask={onSelectTask}
           onLoadMore={onLoadMore}
           resolveAssigneeName={resolveAssigneeName}
+          resolveTypeDisplayName={resolveTypeDisplayName}
+          resolveStatusDisplayName={resolveStatusDisplayName}
         />,
       );
 

@@ -12,8 +12,18 @@ const meta = {
     docs: {
       description: {
         component:
-          'The only elevated surface in the app — `TaskCard`/detail panels compose this instead of a raw `<div>`.',
+          'The only elevated surface in the app — the user gate and other detail panels compose this instead of a raw `<div>`.',
       },
+    },
+  },
+  argTypes: {
+    padding: {
+      control: { type: 'select' },
+      options: ['none', 'sm', 'md'],
+    },
+    elevation: {
+      control: { type: 'select' },
+      options: ['flat', 'raised'],
     },
   },
   args: {
@@ -27,12 +37,38 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+export const NoPadding: Story = {
+  args: {
+    padding: 'none',
+  },
+};
+
+export const SmallPadding: Story = {
+  args: {
+    padding: 'sm',
+  },
+};
+
+export const Raised: Story = {
+  args: {
+    elevation: 'raised',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Adds `--shadow-md` on top of the resting border, for a surface that sits above the page.',
+      },
+    },
+  },
+};
+
 export const WithComposedContent: Story = {
   parameters: {
     docs: {
       description: {
         story:
-          'A card composing heading, body text, and a `Badge`, mirroring how `TaskCard` lays out its content.',
+          'A card composing heading, body text, and a `Badge`, the shape a detail panel lays its content out in.',
       },
     },
   },

@@ -20,6 +20,12 @@ vi.mock('../shared/components/Modal', () => ({
   ModalHost: () => <div data-testid="modal-host" />,
 }));
 
+// The registry pulls in every feature screen the app can open in a modal —
+// none of which this layout test exercises.
+vi.mock('../core/modals/modalRegistry', () => ({
+  MODAL_REGISTRY: {},
+}));
+
 describe('AppLayout', () => {
   function renderAppLayout(): ReturnType<typeof render> {
     return render(

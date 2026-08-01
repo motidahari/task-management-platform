@@ -1,14 +1,16 @@
 import type { MouseEventHandler, ReactElement, ReactNode } from 'react';
 
 import { useTranslation } from '../../hooks/useTranslation';
+import { Icon, type IconName } from '../Icon';
 import { Spinner } from '../Spinner';
 import './Button.scss';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
 export interface ButtonProps {
   readonly children: ReactNode;
   readonly variant?: ButtonVariant;
+  readonly icon?: IconName;
   readonly type?: 'button' | 'submit';
   readonly loading?: boolean;
   readonly disabled?: boolean;
@@ -20,6 +22,7 @@ export interface ButtonProps {
 export function Button({
   children,
   variant = 'primary',
+  icon,
   type = 'button',
   loading = false,
   disabled = false,
@@ -39,6 +42,11 @@ export function Button({
       data-testid={testId}
     >
       {loading && <Spinner size="sm" />}
+      {!loading && icon && (
+        <span className="button__icon">
+          <Icon name={icon} />
+        </span>
+      )}
       <span className="button__label">{children}</span>
       {loading && <span className="visually-hidden">{t('loading-label')}</span>}
     </button>

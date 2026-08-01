@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TaskHistoryEntry } from '../../services/taskService.dto';
 import type { StatusDefinition } from '../../types';
-import { HistoryTimeline } from './HistoryTimeline';
+import { formatRelativeTime, HistoryTimeline } from './HistoryTimeline';
 
 vi.mock('../../../../shared/hooks/useTranslation', () => ({
   useTranslation: (scope: string) => ({
@@ -90,6 +90,25 @@ describe('HistoryTimeline', () => {
       const items = screen.getAllByTestId('history-timeline-entry');
       expect(items).toHaveLength(2);
       expect(items[1]?.textContent).toContain('quote: looks good');
+    });
+
+    it('should render an avatar per entry, seeded by that entry’s own assignee', () => {
+      const resolveAssigneeName = (userId: string): string => (userId === 'u-1' ? 'Alice' : 'Bob');
+
+      render(
+        <HistoryTimeline
+          entries={[creationEntry, advanceEntry]}
+          statuses={statuses}
+          hasMore={false}
+          isLoading={false}
+          onLoadMore={vi.fn()}
+          resolveAssigneeName={resolveAssigneeName}
+        />,
+      );
+
+      const items = screen.getAllByTestId('history-timeline-entry');
+      expect(items[0]?.querySelector('.avatar')).toHaveAccessibleName('Alice');
+      expect(items[1]?.querySelector('.avatar')).toHaveAccessibleName('Bob');
     });
   });
 
@@ -180,6 +199,54 @@ describe('HistoryTimeline', () => {
       );
 
       expect(screen.queryByTestId('history-timeline-load-more')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Given:an entry’s timestamp', () => {
+    it('should render a relative label and keep the absolute instant in the title attribute', () => {
+      render(
+        <HistoryTimeline
+          entries={[creationEntry]}
+          statuses={statuses}
+          hasMore={false}
+          isLoading={false}
+          onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
+        />,
+      );
+
+      const timestamp = screen.getByText(formatRelativeTime(creationEntry.createdAt));
+      expect(timestamp.tagName).toBe('TIME');
+      expect(timestamp).toHaveAttribute(
+        'title',
+        new Date(creationEntry.createdAt).toLocaleString(),
+      );
+    });
+  });
+
+  describe('formatRelativeTime', () => {
+    describe('Given:a date two days before now', () => {
+      it('should format it as "2 days ago"', () => {
+        const now = new Date('2026-01-10T00:00:00.000Z');
+
+        expect(formatRelativeTime('2026-01-08T00:00:00.000Z', now)).toBe('2 days ago');
+      });
+    });
+
+    describe('Given:a date three hours after now', () => {
+      it('should format it as "in 3 hours"', () => {
+        const now = new Date('2026-01-10T00:00:00.000Z');
+
+        expect(formatRelativeTime('2026-01-10T03:00:00.000Z', now)).toBe('in 3 hours');
+      });
+    });
+
+    describe('Given:a date under a minute from now', () => {
+      it('should fall back to seconds', () => {
+        const now = new Date('2026-01-10T00:00:30.000Z');
+
+        expect(formatRelativeTime('2026-01-10T00:00:00.000Z', now)).toBe('30 seconds ago');
+      });
     });
   });
 });

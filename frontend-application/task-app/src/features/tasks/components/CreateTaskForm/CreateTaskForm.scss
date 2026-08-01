@@ -4,7 +4,3 @@
 .create-task-form {
   @include mixins.flx($direction: column, $gap: vars.$spacing-md);
 }
-
-.create-task-form__title {
-  margin: 0;
-}

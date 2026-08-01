@@ -1,5 +1,7 @@
 import { useState, type FormEvent, type ReactElement } from 'react';
 
+import { useBus } from '../../../../core/bus/useBus';
+import { Avatar } from '../../../../shared/components/Avatar';
 import { Button } from '../../../../shared/components/Button';
 import { Select, type SelectOption } from '../../../../shared/components/Select';
 import { useToast } from '../../../../shared/hooks/useToast';
@@ -7,8 +9,7 @@ import { useTranslation } from '../../../../shared/hooks/useTranslation';
 import { useCurrentUserStore } from '../../stores/useCurrentUserStore';
 import { useTaskStore } from '../../stores/useTaskStore';
 import { useTaskTypeStore } from '../../stores/useTaskTypeStore';
-import type { TaskTypeDefinition } from '../../types';
-import { UserSelect } from '../UserSelect';
+import type { TaskTypeDefinition, User } from '../../types';
 import './CreateTaskForm.scss';
 
 function toTypeOptions(definitions: readonly TaskTypeDefinition[]): SelectOption[] {
@@ -18,15 +19,26 @@ function toTypeOptions(definitions: readonly TaskTypeDefinition[]): SelectOption
   }));
 }
 
+function toAssigneeOptions(users: readonly User[]): SelectOption[] {
+  return users.map((user) => ({
+    value: user.id,
+    label: user.name,
+    icon: <Avatar seed={user.id} size={20} />,
+  }));
+}
+
 /**
- * Inline creation form: task type (from the session-cached type metadata)
- * plus initial assignee, submitted straight to `useTaskStore.createTask`.
- * Clears itself only on success — a failed submit keeps the user's picks so
- * they don't have to redo the whole form after fixing one field.
+ * The `create-task` modal's body: task type (from the session-cached type
+ * metadata) plus initial assignee, submitted straight to
+ * `useTaskStore.createTask`. Clears itself and closes the modal only on
+ * success — a failed submit keeps the user's picks and the modal open so
+ * they don't have to redo the whole form after fixing one field. Renders no
+ * title of its own — `CreateTaskModal` supplies that via the shared `Modal`.
  */
 export function CreateTaskForm(): ReactElement {
   const { t } = useTranslation('create-task-form');
   const toast = useToast();
+  const { emit } = useBus();
   const definitions = useTaskTypeStore((state) => state.definitions);
   const users = useCurrentUserStore((state) => state.users);
   const isSubmitting = useTaskStore((state) => state.isLoading);
@@ -46,6 +58,7 @@ export function CreateTaskForm(): ReactElement {
       setType('');
       setAssignedUserId('');
       toast.success('create-task-form.success-toast');
+      emit('modal:close');
     }
   }
 
@@ -55,7 +68,6 @@ export function CreateTaskForm(): ReactElement {
       data-testid="create-task-form"
       onSubmit={(event) => void handleSubmit(event)}
     >
-      <h2 className="create-task-form__title">{t('title')}</h2>
       <Select
         id="create-task-form-type"
         label={t('type-label')}
@@ -66,11 +78,11 @@ export function CreateTaskForm(): ReactElement {
         required
         disabled={isSubmitting}
       />
-      <UserSelect
+      <Select
         id="create-task-form-assignee"
         label={t('assignee-label')}
-        users={users}
         value={assignedUserId}
+        options={toAssigneeOptions(users)}
         onChange={setAssignedUserId}
         placeholder={t('assignee-placeholder')}
         required

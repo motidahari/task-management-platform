@@ -28,6 +28,30 @@ describe('Button', () => {
 
       expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('button--danger');
     });
+
+    it('should apply the ghost variant class', () => {
+      render(<Button variant="ghost">Cancel</Button>);
+
+      expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('button--ghost');
+    });
+  });
+
+  describe('Given:an icon prop', () => {
+    it('should render the named icon before the label', () => {
+      const { container } = render(<Button icon="plus">Save</Button>);
+
+      expect(container.querySelector('.button__icon svg')).toBeInTheDocument();
+    });
+
+    it('should not render the icon while loading', () => {
+      const { container } = render(
+        <Button icon="plus" loading>
+          Save
+        </Button>,
+      );
+
+      expect(container.querySelector('.button__icon')).not.toBeInTheDocument();
+    });
   });
 
   describe('Given:a click handler', () => {

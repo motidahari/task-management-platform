@@ -1,6 +1,10 @@
 import type { ReactElement } from 'react';
 
-import { Badge, type BadgeVariant } from '../../../../shared/components/Badge';
+import {
+  Stepper,
+  type StepperStep,
+  type StepperStepState,
+} from '../../../../shared/components/Stepper';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
 import type { StatusDefinition } from '../../types';
 import './StatusStepper.scss';
@@ -10,40 +14,39 @@ export interface StatusStepperProps {
   readonly currentStatus: number;
 }
 
-function resolveStepVariant(isCurrent: boolean, isCompleted: boolean): BadgeVariant {
-  if (isCurrent) return 'info';
-  if (isCompleted) return 'success';
-  return 'neutral';
+function resolveStepState(status: number, currentStatus: number): StepperStepState {
+  if (status === currentStatus) return 'current';
+  if (status < currentStatus) return 'done';
+  return 'upcoming';
 }
 
-function resolveStepClassName(isCurrent: boolean): string {
-  return isCurrent ? 'status-stepper__step status-stepper__step--current' : 'status-stepper__step';
+function toStepperSteps(
+  statuses: readonly StatusDefinition[],
+  currentStatus: number,
+): StepperStep[] {
+  return statuses.map((status) => ({
+    id: String(status.status),
+    label: status.displayName,
+    state: resolveStepState(status.status, currentStatus),
+  }));
 }
 
 /**
- * Renders the ordered status chain straight from the task-type metadata and
- * marks the one the task is currently at, so a new status registered on the
- * backend appears in the chain with no change here.
+ * Maps the task-type metadata's status chain onto the shared `Stepper`, so a
+ * new status registered on the backend appears in the chain with no change
+ * here. Stays type-agnostic and owns no step markup or ARIA semantics of its
+ * own — those live entirely in `Stepper`.
  */
 export function StatusStepper({ statuses, currentStatus }: StatusStepperProps): ReactElement {
   const { t } = useTranslation('status-stepper');
 
   return (
-    <ol className="status-stepper" aria-label={t('aria-label')} data-testid="status-stepper">
-      {statuses.map((status) => {
-        const isCurrent = status.status === currentStatus;
-        const isCompleted = status.status < currentStatus;
-
-        return (
-          <li
-            key={status.status}
-            className={resolveStepClassName(isCurrent)}
-            aria-current={isCurrent ? 'step' : undefined}
-          >
-            <Badge variant={resolveStepVariant(isCurrent, isCompleted)}>{status.displayName}</Badge>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="status-stepper" data-testid="status-stepper">
+      <Stepper
+        steps={toStepperSteps(statuses, currentStatus)}
+        ariaLabel={t('aria-label')}
+        orientation="vertical"
+      />
+    </div>
   );
 }

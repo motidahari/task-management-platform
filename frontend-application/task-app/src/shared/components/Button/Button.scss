@@ -7,8 +7,8 @@
   padding: vars.$spacing-sm vars.$spacing-lg;
   border: 1px solid transparent;
   border-radius: vars.$radius-sm;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: vars.$font-size-md;
+  font-weight: vars.$font-weight-semibold;
   cursor: pointer;
   transition:
     background-color vars.$transition-fast,
@@ -45,6 +45,16 @@
 
     &:hover:not(:disabled) {
       opacity: 0.85;
+    }
+  }
+
+  &--ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-text);
+
+    &:hover:not(:disabled) {
+      background-color: var(--color-primary-soft);
     }
   }
 }
