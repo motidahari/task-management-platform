@@ -1,4 +1,4 @@
-import { BaseDao, type CursorPage } from '@core/shared';
+import { BaseDao, type CursorPage, toMicrosecondIso } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, DeepPartial, EntityManager } from 'typeorm';
@@ -60,25 +60,58 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
   }
 
   /**
+   * Reads one task with no lock, from the primary/write connection rather
+   * than the replica-capable one `getById` uses — for the one read that must
+   * see its own immediately-preceding write (a client's natural
+   * mutate-then-fetch flow). Not `findOneOrThrow`, which only ever reads
+   * either the replica-capable connection or a transaction's own manager:
+   * this read is neither — no transaction, but the primary.
+   *
+   * Throws when the row is absent, matching every other `getBy*` accessor in
+   * this service: the caller never null-checks the result.
+   */
+  async getByIdOnPrimary(taskId: string): Promise<Task> {
+    const entity = await this.writeRepository.findOne({ where: { id: taskId } });
+
+    if (!entity) {
+      throw new TaskNotFoundException(taskId);
+    }
+
+    return this.toDomainModel(entity);
+  }
+
+  /**
    * Newest-first keyset page of one assignee's tasks. Ordering, index and
    * predicate all agree on `(created_at DESC, id DESC)` — `id` breaks ties
    * between rows sharing one `created_at`, which two transitions landing in
    * the same millisecond can otherwise do, so a plain `created_at`-only
    * comparison would skip or duplicate a row exactly at a page boundary.
    * Lag-tolerant, so it reads from the replica-capable connection.
+   *
+   * `isClosed` is optional and additive: omitted, the page is every task
+   * assigned to the user, exactly today's behavior; supplied, it narrows to
+   * open or closed tasks only. `isClosed: false` is also the one variant
+   * with its own partial index, so filtering to "my open tasks" costs
+   * nothing extra to plan.
    */
   async findPageByAssignee(
     assignedUserId: string,
     limit: number,
     cursor?: string,
+    isClosed?: boolean,
   ): Promise<CursorPage<Task>> {
     return this.findKeysetPage({
       alias: 'task',
       direction: 'DESC',
       limit,
       cursor,
-      applyFilter: (queryBuilder) =>
-        queryBuilder.where('task.assignedUserId = :assignedUserId', { assignedUserId }),
+      applyFilter: (queryBuilder) => {
+        queryBuilder.where('task.assignedUserId = :assignedUserId', { assignedUserId });
+
+        if (isClosed !== undefined) {
+          queryBuilder.andWhere('task.isClosed = :isClosed', { isClosed });
+        }
+      },
       keyOf: (task) => ({ createdAt: task.createdAt, id: task.id }),
     });
   }
@@ -92,10 +125,17 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
       assignedUserId: entity.assignedUserId,
       customFields: entity.customFields,
       createdAt: entity.createdAt,
-      updatedAt: entity.updatedAt,
+      updatedAt: toMicrosecondIso(entity.updatedAtRaw),
     });
   }
 
+  /**
+   * `updatedAt` is deliberately absent: it is the microsecond-precision
+   * projection the domain model carries as a string, never a value any
+   * write path assigns back onto the `timestamptz` column — the column
+   * updates itself (`@UpdateDateColumn`), and a `toEntity` writing a string
+   * into it would corrupt the type it was declared with.
+   */
   protected toEntity(domainModel: Task): DeepPartial<TaskEntity> {
     return {
       id: domainModel.id,
@@ -105,7 +145,6 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
       assignedUserId: domainModel.assignedUserId,
       customFields: domainModel.customFields,
       createdAt: domainModel.createdAt,
-      updatedAt: domainModel.updatedAt,
     };
   }
 }

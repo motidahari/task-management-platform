@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router';
 
 import { Button } from '../../../shared/components/Button';
@@ -9,11 +9,22 @@ import { UserSelect } from '../components/UserSelect';
 import { useTaskRealtime } from '../hooks/useTaskRealtime';
 import { useCurrentUserStore } from '../stores/useCurrentUserStore';
 import { useTaskStore } from '../stores/useTaskStore';
+import type { User } from '../types';
 import './MyTasksView.scss';
+
+/**
+ * Task/history payloads carry only an assignee id, by contract — this is the
+ * one place that turns those ids into the names users see, falling back to
+ * the raw id for anyone outside the loaded directory rather than a blank.
+ */
+function buildAssigneeNameLookup(users: readonly User[]): Record<string, string> {
+  return Object.fromEntries(users.map((user) => [user.id, user.name]));
+}
 
 interface TaskListSectionProps {
   readonly userId: string;
   readonly isClosed: boolean;
+  readonly resolveAssigneeName: (userId: string) => string;
 }
 
 /**
@@ -23,7 +34,11 @@ interface TaskListSectionProps {
  * — hooks can't be called conditionally, and there is nothing to watch
  * before a user is picked.
  */
-function TaskListSection({ userId, isClosed }: TaskListSectionProps): ReactElement {
+function TaskListSection({
+  userId,
+  isClosed,
+  resolveAssigneeName,
+}: TaskListSectionProps): ReactElement {
   const navigate = useNavigate();
   const items = useTaskStore((state) => state.items);
   const nextCursor = useTaskStore((state) => state.nextCursor);
@@ -51,6 +66,7 @@ function TaskListSection({ userId, isClosed }: TaskListSectionProps): ReactEleme
       hasMore={nextCursor !== null}
       onSelectTask={(taskId) => void navigate(`/tasks/${taskId}`)}
       onLoadMore={handleLoadMore}
+      resolveAssigneeName={resolveAssigneeName}
     />
   );
 }
@@ -74,6 +90,12 @@ export function MyTasksView(): ReactElement {
   useEffect(() => {
     void fetchUsers();
   }, [fetchUsers]);
+
+  const assigneeNamesById = useMemo(() => buildAssigneeNameLookup(users), [users]);
+  const resolveAssigneeName = useCallback(
+    (userId: string) => assigneeNamesById[userId] ?? userId,
+    [assigneeNamesById],
+  );
 
   return (
     <div className="my-tasks-view">
@@ -108,7 +130,11 @@ export function MyTasksView(): ReactElement {
       <div className="my-tasks-view__panes">
         <section className="my-tasks-view__list-pane">
           {selectedUserId !== null ? (
-            <TaskListSection userId={selectedUserId} isClosed={isClosedFilter} />
+            <TaskListSection
+              userId={selectedUserId}
+              isClosed={isClosedFilter}
+              resolveAssigneeName={resolveAssigneeName}
+            />
           ) : (
             <p className="my-tasks-view__empty-state">{t('select-user-prompt')}</p>
           )}

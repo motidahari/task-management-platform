@@ -6,6 +6,9 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { bus } from '../../../core/bus/bus';
 import { taskService } from '../services/taskService';
 import type { TaskHistoryPage } from '../services/taskService.dto';
+import { userService } from '../services/userService';
+import type { UserListPage } from '../services/userService.dto';
+import { useCurrentUserStore } from '../stores/useCurrentUserStore';
 import { useTaskStore } from '../stores/useTaskStore';
 import { useTaskTypeStore } from '../stores/useTaskTypeStore';
 import type { Task, TaskTypeDefinition } from '../types';
@@ -39,8 +42,10 @@ const getTaskMock = vi.spyOn(taskService, 'getTask');
 const changeTaskStatusMock = vi.spyOn(taskService, 'changeTaskStatus');
 const closeTaskMock = vi.spyOn(taskService, 'closeTask');
 const getTaskHistoryMock = vi.spyOn(taskService, 'getTaskHistory');
+const listUsersMock = vi.spyOn(userService, 'listUsers');
 
 const emptyHistoryPage: TaskHistoryPage = { items: [], nextCursor: null, limit: 20 };
+const emptyUserPage: UserListPage = { items: [], nextCursor: null, limit: 20 };
 
 const developmentType: TaskTypeDefinition = {
   type: 'development',
@@ -89,8 +94,10 @@ describe('TaskDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useTaskStore.getState().reset();
+    useCurrentUserStore.getState().reset();
     useTaskTypeStore.setState({ status: 'ready', definitions: [developmentType], error: null });
     getTaskHistoryMock.mockResolvedValue(emptyHistoryPage);
+    listUsersMock.mockResolvedValue(emptyUserPage);
   });
 
   describe('Given:a task loads successfully', () => {
@@ -254,6 +261,49 @@ describe('TaskDetailView', () => {
 
       expect(await screen.findByTestId('history-timeline')).toBeInTheDocument();
       expect(screen.queryByTestId('task-detail-view-actions')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the user directory has loaded', () => {
+    it('should resolve assignee ids to names in the history timeline and the reassignment picker, falling back to the raw id for an assignee outside the directory', async () => {
+      listUsersMock.mockResolvedValue({
+        items: [{ id: 'u-1', name: 'Alice', email: 'alice@demo.local' }],
+        nextCursor: null,
+        limit: 20,
+      });
+      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1, assignedUserId: 'u-1' }));
+      getTaskHistoryMock.mockResolvedValueOnce({
+        items: [
+          {
+            fromStatus: null,
+            toStatus: 1,
+            assignedUserId: 'u-1',
+            fieldsSnapshot: {},
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            fromStatus: 1,
+            toStatus: 2,
+            assignedUserId: 'u-unknown',
+            fieldsSnapshot: {},
+            createdAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        nextCursor: null,
+        limit: 20,
+      });
+
+      renderTaskDetailView();
+      fireEvent.click(await screen.findByTestId('advance-button'));
+
+      expect(
+        await screen.findByText('history-timeline.assignee-label:{"name":"Alice"}'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('history-timeline.assignee-label:{"name":"u-unknown"}'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Alice' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
     });
   });
 });

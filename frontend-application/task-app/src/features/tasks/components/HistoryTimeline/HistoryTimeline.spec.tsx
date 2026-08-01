@@ -34,6 +34,8 @@ describe('HistoryTimeline', () => {
     createdAt: '2026-01-02T00:00:00.000Z',
   };
 
+  const identityResolver = (userId: string): string => userId;
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -47,6 +49,7 @@ describe('HistoryTimeline', () => {
           hasMore={false}
           isLoading
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
@@ -63,6 +66,7 @@ describe('HistoryTimeline', () => {
           hasMore={false}
           isLoading={false}
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
@@ -79,6 +83,7 @@ describe('HistoryTimeline', () => {
           hasMore={false}
           isLoading={false}
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
@@ -98,6 +103,7 @@ describe('HistoryTimeline', () => {
           hasMore
           isLoading={false}
           onLoadMore={onLoadMore}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
@@ -114,6 +120,7 @@ describe('HistoryTimeline', () => {
           hasMore
           isLoading={false}
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
@@ -126,11 +133,36 @@ describe('HistoryTimeline', () => {
           hasMore={false}
           isLoading={false}
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 
       expect(screen.getAllByTestId('history-timeline-entry')).toHaveLength(2);
       expect(screen.queryByTestId('history-timeline-load-more')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Given:a resolver that maps some assignee ids to names', () => {
+    it('should render the resolved name, falling back to the raw id for an unresolved assignee', () => {
+      const resolveAssigneeName = (userId: string): string => (userId === 'u-1' ? 'Alice' : userId);
+
+      render(
+        <HistoryTimeline
+          entries={[creationEntry, advanceEntry]}
+          statuses={statuses}
+          hasMore={false}
+          isLoading={false}
+          onLoadMore={vi.fn()}
+          resolveAssigneeName={resolveAssigneeName}
+        />,
+      );
+
+      expect(
+        screen.getByText('history-timeline.assignee-label:{"name":"Alice"}'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('history-timeline.assignee-label:{"name":"u-2"}'),
+      ).toBeInTheDocument();
     });
   });
 
@@ -143,6 +175,7 @@ describe('HistoryTimeline', () => {
           hasMore={false}
           isLoading={false}
           onLoadMore={vi.fn()}
+          resolveAssigneeName={identityResolver}
         />,
       );
 

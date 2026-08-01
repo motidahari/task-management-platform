@@ -1,3 +1,4 @@
+import { utcTimestampTextExpression } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, EntityManager } from 'typeorm';
@@ -7,6 +8,15 @@ import { READ_CONNECTION } from '../../infrastructure/database/database.module';
 import { TaskDao } from '../../domain/task.dao';
 import { TaskEntity } from '../../domain/entities/task.entity';
 import { Task } from '../../domain/task.model';
+
+/**
+ * The one SQL fragment every write path on this table appends to its
+ * `RETURNING` clause: the same UTC-text projection the entity's
+ * `updatedAtRaw` virtual column computes for reads, aliased to the raw-row
+ * key `toTaskEntity` expects. Kept as one constant so `create`, `update` and
+ * `close` can never drift into three different microsecond projections.
+ */
+const RETURNING_WITH_UPDATED_AT_RAW = `*, ${utcTimestampTextExpression('updated_at')} AS updated_at_raw`;
 
 /**
  * Adds the one write path `TaskDao` doesn't expose: inserting a brand new
@@ -31,12 +41,35 @@ export class TaskWriteDao extends TaskDao {
    * the caller's transaction `manager` so the row commits atomically with
    * the creation history row the service appends alongside it; a task
    * without that row (or the reverse) would be a corrupt audit trail.
+   *
+   * An explicit query builder rather than the generic `insertOne` helper:
+   * `insertOne` can only ever `RETURNING *`, and this write additionally
+   * needs the computed `updated_at_raw` projection so the create response's
+   * microseconds already match what a subsequent `GET` of the same row would
+   * report, instead of a caller seeing them appear only on the next read.
    */
   async create(
     params: { type: string; assignedUserId: string },
     manager: EntityManager,
   ): Promise<Task> {
-    return await this.insertOne(params, manager);
+    const insertResult = await this.repositoryFor(manager)
+      .createQueryBuilder()
+      .insert()
+      .into(TaskEntity)
+      .values(params)
+      .returning(RETURNING_WITH_UPDATED_AT_RAW)
+      .execute();
+
+    const [rawRow] = insertResult.raw as unknown[];
+
+    if (rawRow === undefined) {
+      // Nothing about this insert is conditional — a missing RETURNING row
+      // here means the statement itself failed to produce one, which is a
+      // driver-level inconsistency, not a client-facing outcome.
+      throw new Error('Insert of a new task returned no row.');
+    }
+
+    return this.toDomainModel(toTaskEntity(rawRow as RawUpdatedTaskRow));
   }
 
   /**
@@ -70,6 +103,7 @@ export class TaskWriteDao extends TaskDao {
         throw new Error(`Update of task ${taskId} returned no row.`);
       },
       manager,
+      RETURNING_WITH_UPDATED_AT_RAW,
     );
   }
 
@@ -93,6 +127,7 @@ export class TaskWriteDao extends TaskDao {
         throw new Error(`Close of task ${taskId} returned no row.`);
       },
       manager,
+      RETURNING_WITH_UPDATED_AT_RAW,
     );
   }
 }
@@ -111,6 +146,7 @@ interface RawUpdatedTaskRow {
   readonly custom_fields: Record<string, unknown>;
   readonly created_at: Date;
   readonly updated_at: Date;
+  readonly updated_at_raw: string;
 }
 
 function toTaskEntity(row: RawUpdatedTaskRow): TaskEntity {
@@ -123,5 +159,6 @@ function toTaskEntity(row: RawUpdatedTaskRow): TaskEntity {
     customFields: row.custom_fields,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    updatedAtRaw: row.updated_at_raw,
   };
 }

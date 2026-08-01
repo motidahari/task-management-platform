@@ -13,6 +13,8 @@ import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { HistoryPageQueryDto } from './dto/history-page-query.dto';
 import type { HistoryPageDto } from './dto/history-page.dto';
+import type { TaskPageDto } from './dto/task-page.dto';
+import { TasksPageQueryDto } from './dto/tasks-page-query.dto';
 import { AssigneeNotFoundException } from './exception/assignee-not-found.exception';
 import { InvalidStatusTransitionException } from './exception/invalid-status-transition.exception';
 import { MissingRequiredFieldsException } from './exception/missing-required-fields.exception';
@@ -20,11 +22,12 @@ import { TaskClosedException } from './exception/task-closed.exception';
 import { TaskNotAtFinalStatusException } from './exception/task-not-at-final-status.exception';
 import { TaskStateConflictException } from './exception/task-state-conflict.exception';
 import { UnknownTaskTypeException } from './exception/unknown-task-type.exception';
+import { toTaskResponse } from './task-response.mapper';
 
-/** Applied when the caller sends no `limit` at all. */
-const DEFAULT_HISTORY_PAGE_LIMIT = 20;
+/** Applied when the caller sends no `limit` at all, on any keyset page this service serves. */
+const DEFAULT_PAGE_LIMIT = 20;
 /** A caller-requested `limit` above this is capped rather than rejected — an oversized ask is not a malformed one. */
-const MAX_HISTORY_PAGE_LIMIT = 100;
+const MAX_PAGE_LIMIT = 100;
 
 /**
  * Single write funnel for the tasks domain. Every mutation opens its own
@@ -124,6 +127,17 @@ export class TaskService {
   }
 
   /**
+   * Reads a task from the primary/write connection rather than the
+   * replica-capable one most reads use — the client's natural flow is
+   * mutate, then immediately fetch the same task, and a lagging replica
+   * would risk serving the pre-mutation row right back to the caller that
+   * just changed it.
+   */
+  async getById(taskId: string): Promise<Task> {
+    return this.taskDao.getByIdOnPrimary(taskId);
+  }
+
+  /**
    * The read side of the audit trail every status change writes: confirms
    * the task exists (a 404 gate, run before paging so a nonexistent task
    * never reaches the DAO), then serves its transitions oldest-first. Not
@@ -133,7 +147,7 @@ export class TaskService {
   async getHistoryPage(taskId: string, query: HistoryPageQueryDto): Promise<HistoryPageDto> {
     await this.taskDao.getById(taskId);
 
-    const limit = this.resolveHistoryPageLimit(query.limit);
+    const limit = this.resolvePageLimit(query.limit);
     const page = await this.taskStatusHistoryDao.findPageByTask(taskId, limit, query.cursor);
 
     return {
@@ -149,13 +163,33 @@ export class TaskService {
     };
   }
 
-  /** Absent defaults to {@link DEFAULT_HISTORY_PAGE_LIMIT}; anything past {@link MAX_HISTORY_PAGE_LIMIT} is capped, not rejected. */
-  private resolveHistoryPageLimit(limit: number | undefined): number {
+  /**
+   * One assignee's tasks, newest-first, optionally narrowed to open or
+   * closed only. Existence of the user itself is not this method's concern
+   * — whichever caller resolves a URI-addressed user id into this call
+   * already owns that gate; a userId with no assigned tasks pages to an
+   * empty, valid result here, not a 404.
+   */
+  async getTasksPageByAssignee(userId: string, query: TasksPageQueryDto): Promise<TaskPageDto> {
+    const limit = this.resolvePageLimit(query.limit);
+    const page = await this.taskDao.findPageByAssignee(userId, limit, query.cursor, query.isClosed);
+
+    return {
+      items: page.items.map((task) =>
+        toTaskResponse(task, this.taskTypeRegistry.statusNameOf(task.type, task.status)),
+      ),
+      nextCursor: page.nextCursor,
+      limit,
+    };
+  }
+
+  /** Absent defaults to {@link DEFAULT_PAGE_LIMIT}; anything past {@link MAX_PAGE_LIMIT} is capped, not rejected. */
+  private resolvePageLimit(limit: number | undefined): number {
     if (limit === undefined) {
-      return DEFAULT_HISTORY_PAGE_LIMIT;
+      return DEFAULT_PAGE_LIMIT;
     }
 
-    return Math.min(limit, MAX_HISTORY_PAGE_LIMIT);
+    return Math.min(limit, MAX_PAGE_LIMIT);
   }
 
   /**

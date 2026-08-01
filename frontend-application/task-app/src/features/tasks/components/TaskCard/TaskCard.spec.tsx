@@ -38,7 +38,7 @@ describe('TaskCard', () => {
     it('should render its type and status name', () => {
       const task = buildTask({ statusName: 'in-progress' });
 
-      render(<TaskCard task={task} onSelect={onSelect} />);
+      render(<TaskCard task={task} assigneeName="Alice" onSelect={onSelect} />);
 
       expect(screen.getByText('development')).toBeInTheDocument();
       expect(screen.getByText('in-progress')).toBeInTheDocument();
@@ -49,10 +49,30 @@ describe('TaskCard', () => {
     it('should render the closed badge instead of the status name', () => {
       const task = buildTask({ isClosed: true, statusName: 'done' });
 
-      render(<TaskCard task={task} onSelect={onSelect} />);
+      render(<TaskCard task={task} assigneeName="Alice" onSelect={onSelect} />);
 
       expect(screen.getByText('task-card.closed-badge')).toBeInTheDocument();
       expect(screen.queryByText('done')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the assignee id resolves to a name in the loaded directory', () => {
+    it('should render the resolved name instead of the raw id', () => {
+      const task = buildTask({ assignedUserId: 'u-1' });
+
+      render(<TaskCard task={task} assigneeName="Alice" onSelect={onSelect} />);
+
+      expect(screen.getByText('task-card.assignee-label:{"name":"Alice"}')).toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the assignee id has no match in the loaded directory', () => {
+    it('should fall back to rendering the raw id', () => {
+      const task = buildTask({ assignedUserId: 'u-unknown' });
+
+      render(<TaskCard task={task} assigneeName="u-unknown" onSelect={onSelect} />);
+
+      expect(screen.getByText('task-card.assignee-label:{"name":"u-unknown"}')).toBeInTheDocument();
     });
   });
 
@@ -60,7 +80,7 @@ describe('TaskCard', () => {
     it('should emit the task id upward', () => {
       const task = buildTask({ id: 't-42' });
 
-      render(<TaskCard task={task} onSelect={onSelect} />);
+      render(<TaskCard task={task} assigneeName="Alice" onSelect={onSelect} />);
 
       fireEvent.click(screen.getByTestId('task-card-t-42'));
 

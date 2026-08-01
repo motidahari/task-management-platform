@@ -1,3 +1,5 @@
+import { utcTimestampTextExpression } from '@core/shared';
+
 import { TaskEntity } from '../../../../src/domain/entities/task.entity';
 import {
   columnMetadataFor,
@@ -96,6 +98,16 @@ describe('TaskEntity', () => {
       expect(databaseColumnName(column)).toBe('updated_at');
       expect(column.mode).toBe('updateDate');
       expect(column.options.type).toBe('timestamptz');
+    });
+  });
+
+  describe('Given:the updatedAtRaw column, When:reading its metadata', () => {
+    it('should be a virtual text column computed from the UTC-cast expression', () => {
+      const column = columnMetadataFor(TaskEntity, 'updatedAtRaw');
+
+      expect(column.mode).toBe('virtual-property');
+      expect(column.options.type).toBe('text');
+      expect(column.options.query?.('task')).toBe(utcTimestampTextExpression('task.updated_at'));
     });
   });
 });
