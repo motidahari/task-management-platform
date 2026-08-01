@@ -9,6 +9,15 @@ const DATABASE_URL = process.env.DB_URL;
 const HISTORY_TABLE_NAME = 'task_status_history';
 
 /**
+ * A schema of its own, never `public` — this spec's `DROP`/`CREATE` of a
+ * bare `task_status_history` must never collide with the real migrated
+ * `public.task_status_history` every other integration/API spec in the same
+ * run depends on. `search_path` (below) is what makes the service's
+ * unqualified table name resolve here instead of into `public`.
+ */
+const TEST_SCHEMA_NAME = 'partition_maint_test';
+
+/**
  * Runs only against a real Postgres instance reachable at the same `DB_URL`
  * the app itself reads — skipped entirely, rather than failed, when no
  * database is configured for the local run (e.g. outside `docker compose up`).
@@ -31,9 +40,16 @@ async function recreateBareHistoryParent(dataSource: DataSource): Promise<void> 
   `);
 }
 
+/**
+ * Scoped to {@link TEST_SCHEMA_NAME} — `public` already carries the real,
+ * migrated `task_status_history_*` partitions, so an unscoped
+ * `information_schema.tables` lookup would double-count this spec's own
+ * partitions with those.
+ */
 async function historyPartitionNames(dataSource: DataSource): Promise<string[]> {
   const rows: Array<{ table_name: string }> = await dataSource.query(
-    `SELECT table_name FROM information_schema.tables WHERE table_name LIKE '${HISTORY_TABLE_NAME}\\_%'`,
+    `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_name LIKE $2`,
+    [TEST_SCHEMA_NAME, `${HISTORY_TABLE_NAME}\\_%`],
   );
 
   return rows.map((row) => row.table_name);
@@ -46,21 +62,49 @@ describeAgainstRealDatabase(
     let databaseReachable = true;
 
     beforeAll(async () => {
-      dataSource = new DataSource({ type: 'postgres', url: DATABASE_URL, entities: [] });
+      dataSource = new DataSource({
+        type: 'postgres',
+        url: DATABASE_URL,
+        entities: [],
+        // TypeORM's own `schema` option only qualifies names it generates
+        // itself (entity/schema-builder SQL) — it never issues a `SET
+        // search_path`, so it would not affect the raw, unqualified queries
+        // this spec and `PartitionMaintenanceService` both run. `options` is
+        // a real `pg`/libpq connection parameter: Postgres parses it as
+        // command-line-style flags at session start, so every physical
+        // connection this pool ever opens — including the ones the service
+        // pulls via its own `dataSource.createQueryRunner()` — resolves
+        // `task_status_history` into `TEST_SCHEMA_NAME`, never `public`.
+        extra: { options: `-c search_path=${TEST_SCHEMA_NAME}` },
+      });
 
       try {
         await dataSource.initialize();
-        await recreateBareHistoryParent(dataSource);
       } catch {
         // DB_URL was set but nothing is actually listening (e.g. compose not
         // up) — every test below backs off cleanly instead of failing.
         databaseReachable = false;
       }
+
+      if (databaseReachable) {
+        // Deliberately outside the connectivity catch above: a genuine setup
+        // failure here (a typo, a bad search_path, a permissions problem)
+        // must fail the suite loudly, not get misreported as "database
+        // unreachable" and silently pass every test via the early return.
+        //
+        // Schema-qualified, so it succeeds regardless of the current
+        // `search_path` — unlike the unqualified statements below, which
+        // depend on this having already run.
+        await dataSource.query(`CREATE SCHEMA IF NOT EXISTS ${TEST_SCHEMA_NAME}`);
+        await recreateBareHistoryParent(dataSource);
+      }
     });
 
     afterAll(async () => {
       if (databaseReachable) {
-        await dataSource.query(`DROP TABLE IF EXISTS ${HISTORY_TABLE_NAME}`);
+        // Cascades onto the parent and every partition created under it in
+        // one statement — `public.task_status_history` is never touched.
+        await dataSource.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA_NAME} CASCADE`);
       }
 
       if (dataSource?.isInitialized) {
