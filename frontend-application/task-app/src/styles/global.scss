@@ -61,12 +61,21 @@ body {
 
   &__title {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: vars.$font-size-lg;
   }
 
   &__message {
     margin: 0;
     max-width: 40rem;
     color: var(--color-text);
+  }
+
+  // Development-only technical detail — deliberately quieter than the copy
+  // above it, which is the part a visitor is meant to read.
+  &__detail {
+    margin: 0;
+    max-width: 40rem;
+    color: var(--color-text-secondary);
+    font-size: vars.$font-size-sm;
   }
 }
