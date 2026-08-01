@@ -236,20 +236,15 @@ describe('TaskDetailView', () => {
 
   describe('Given:the user opens the advance form and submits it', () => {
     it('should render the next status’s required fields and the assignee picker, then submit with expectedStatus', async () => {
-      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1 }));
-      getTaskHistoryMock.mockResolvedValueOnce({
+      listUsersMock.mockResolvedValue({
         items: [
-          {
-            fromStatus: null,
-            toStatus: 1,
-            assignedUserId: 'u-2',
-            fieldsSnapshot: {},
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
+          { id: 'u-1', name: 'Alice', email: 'alice@demo.local' },
+          { id: 'u-2', name: 'Bob', email: 'bob@demo.local' },
         ],
         nextCursor: null,
         limit: 20,
       });
+      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1 }));
       changeTaskStatusMock.mockResolvedValueOnce(
         buildTask({ status: 2, statusName: 'in-progress' }),
       );
@@ -258,12 +253,12 @@ describe('TaskDetailView', () => {
 
       expect(await screen.findByTestId('dynamic-fields-form')).toBeInTheDocument();
       fireEvent.click(screen.getByLabelText('assignee-select.label'));
-      await waitFor(() => expect(screen.getByRole('option', { name: 'u-2' })).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByRole('option', { name: 'Bob' })).toBeInTheDocument());
 
       fireEvent.change(screen.getByLabelText('Branch name'), {
         target: { value: 'feature/login' },
       });
-      fireEvent.click(screen.getByRole('option', { name: 'u-2' }));
+      fireEvent.click(screen.getByRole('option', { name: 'Bob' }));
       fireEvent.click(screen.getByTestId('advance-submit'));
 
       await waitFor(() =>
@@ -386,7 +381,7 @@ describe('TaskDetailView', () => {
   });
 
   describe('Given:the user directory has loaded', () => {
-    it('should resolve assignee ids to names in the history timeline and the reassignment picker, falling back to the raw id for an assignee outside the directory', async () => {
+    it('should resolve assignee ids to names in the history timeline, falling back to the raw id for an assignee outside the directory', async () => {
       listUsersMock.mockResolvedValue({
         items: [{ id: 'u-1', name: 'Alice', email: 'alice@demo.local' }],
         nextCursor: null,
@@ -422,10 +417,55 @@ describe('TaskDetailView', () => {
       expect(
         screen.getByText('history-timeline.assignee-label:{"name":"u-unknown"}'),
       ).toBeInTheDocument();
+    });
+
+    it('should offer the full user directory in the reassignment picker, not just the ids this task has touched', async () => {
+      listUsersMock.mockResolvedValue({
+        items: [
+          { id: 'u-1', name: 'Alice', email: 'alice@demo.local' },
+          { id: 'u-2', name: 'Bob', email: 'bob@demo.local' },
+          { id: 'u-3', name: 'Carol', email: 'carol@demo.local' },
+        ],
+        nextCursor: null,
+        limit: 20,
+      });
+      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1, assignedUserId: 'u-1' }));
+
+      renderTaskDetailView();
+      await screen.findByTestId('status-stepper');
 
       fireEvent.click(screen.getByLabelText('assignee-select.label'));
       expect(await screen.findByRole('option', { name: 'Alice' })).toBeInTheDocument();
-      expect(await screen.findByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Bob' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Carol' })).toBeInTheDocument();
+    });
+
+    it('should still offer the task’s current assignee in the picker when that id has fallen out of the directory', async () => {
+      listUsersMock.mockResolvedValue({
+        items: [{ id: 'u-2', name: 'Bob', email: 'bob@demo.local' }],
+        nextCursor: null,
+        limit: 20,
+      });
+      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1, assignedUserId: 'u-unknown' }));
+
+      renderTaskDetailView();
+      await screen.findByTestId('status-stepper');
+
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
+      expect(await screen.findByRole('option', { name: 'Bob' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'u-unknown' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the user directory has not loaded yet', () => {
+    it('should still offer the task’s current assignee in the picker, pre-selected, with no crash', async () => {
+      getTaskMock.mockResolvedValueOnce(buildTask({ status: 1, assignedUserId: 'u-1' }));
+
+      renderTaskDetailView();
+      await screen.findByTestId('status-stepper');
+
+      fireEvent.click(screen.getByLabelText('assignee-select.label'));
+      expect(await screen.findByRole('option', { name: 'u-1' })).toBeInTheDocument();
     });
   });
 
