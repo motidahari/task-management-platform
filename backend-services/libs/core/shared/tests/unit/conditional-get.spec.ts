@@ -7,7 +7,6 @@ import {
 interface CapturedResponse {
   headers: Record<string, string>;
   status?: number;
-  ended: boolean;
 }
 
 function requestWithIfNoneMatch(value: string | undefined): ConditionalGetRequestLike {
@@ -21,12 +20,6 @@ function responseFor(captured: CapturedResponse): ConditionalGetResponseLike {
     },
     status(statusCode: number) {
       captured.status = statusCode;
-
-      return {
-        end() {
-          captured.ended = true;
-        },
-      };
     },
   };
 }
@@ -34,7 +27,7 @@ function responseFor(captured: CapturedResponse): ConditionalGetResponseLike {
 describe('applyConditionalGet', () => {
   describe('Given:no If-None-Match header on the request', () => {
     it('should set Cache-Control: no-cache and an ETag, and report the caller still owns the 200 body', () => {
-      const captured: CapturedResponse = { headers: {}, ended: false };
+      const captured: CapturedResponse = { headers: {} };
       const response = responseFor(captured);
 
       const alreadyAnswered = applyConditionalGet(requestWithIfNoneMatch(undefined), response, {
@@ -45,13 +38,12 @@ describe('applyConditionalGet', () => {
       expect(captured.headers['Cache-Control']).toBe('no-cache');
       expect(captured.headers.ETag).toEqual(expect.stringMatching(/^".+"$/));
       expect(captured.status).toBeUndefined();
-      expect(captured.ended).toBe(false);
     });
   });
 
   describe('Given:an If-None-Match header that does not match the current body', () => {
     it('should still report the caller owns the 200 body', () => {
-      const captured: CapturedResponse = { headers: {}, ended: false };
+      const captured: CapturedResponse = { headers: {} };
       const response = responseFor(captured);
 
       const alreadyAnswered = applyConditionalGet(
@@ -66,13 +58,13 @@ describe('applyConditionalGet', () => {
   });
 
   describe('Given:an If-None-Match header that matches the current body', () => {
-    it('should answer 304 itself, with no body, and report that it already did', () => {
+    it('should set the 304 status without writing a body, and report that it already answered', () => {
       const body = { hello: 'world' };
-      const probe: CapturedResponse = { headers: {}, ended: false };
+      const probe: CapturedResponse = { headers: {} };
       applyConditionalGet(requestWithIfNoneMatch(undefined), responseFor(probe), body);
       const currentEtag = probe.headers.ETag;
 
-      const captured: CapturedResponse = { headers: {}, ended: false };
+      const captured: CapturedResponse = { headers: {} };
       const response = responseFor(captured);
 
       const alreadyAnswered = applyConditionalGet(
@@ -83,14 +75,15 @@ describe('applyConditionalGet', () => {
 
       expect(alreadyAnswered).toBe(true);
       expect(captured.status).toBe(304);
-      expect(captured.ended).toBe(true);
+      expect(captured.headers['Cache-Control']).toBe('no-cache');
+      expect(captured.headers.ETag).toBe(currentEtag);
     });
   });
 
   describe('Given:the same body across two calls', () => {
     it('should produce the same ETag both times', () => {
-      const firstCaptured: CapturedResponse = { headers: {}, ended: false };
-      const secondCaptured: CapturedResponse = { headers: {}, ended: false };
+      const firstCaptured: CapturedResponse = { headers: {} };
+      const secondCaptured: CapturedResponse = { headers: {} };
       const body = { type: 'procurement', finalStatus: 3 };
 
       applyConditionalGet(requestWithIfNoneMatch(undefined), responseFor(firstCaptured), body);
@@ -102,8 +95,8 @@ describe('applyConditionalGet', () => {
 
   describe('Given:two different bodies', () => {
     it('should produce different ETags', () => {
-      const firstCaptured: CapturedResponse = { headers: {}, ended: false };
-      const secondCaptured: CapturedResponse = { headers: {}, ended: false };
+      const firstCaptured: CapturedResponse = { headers: {} };
+      const secondCaptured: CapturedResponse = { headers: {} };
 
       applyConditionalGet(requestWithIfNoneMatch(undefined), responseFor(firstCaptured), {
         type: 'procurement',

@@ -6,7 +6,7 @@ import {
   type NestInterceptor,
   UseInterceptors,
 } from '@nestjs/common';
-import { EMPTY, type Observable, of, switchMap } from 'rxjs';
+import { map, type Observable } from 'rxjs';
 
 import {
   applyConditionalGet,
@@ -22,10 +22,11 @@ import {
  * The handler still has to run before a decision is possible: the ETag is
  * derived from its returned body, so this only ever short-circuits the
  * *response*, never the handler call itself. When the body already matches
- * the client's `If-None-Match`, `applyConditionalGet` has already written the
- * empty 304 itself, and this returns `EMPTY` so Nest's standard response
- * handling never attempts to send a second, conflicting response for the
- * same request.
+ * the client's `If-None-Match`, `applyConditionalGet` has already set the 304
+ * status without writing anything, and this emits `undefined` in place of the
+ * body — the pipeline still completes with a value, so Nest's own response
+ * handling finishes the request exactly once, with no body, under the status
+ * `applyConditionalGet` already set.
  */
 @Injectable()
 export class ConditionalGetInterceptor implements NestInterceptor {
@@ -37,9 +38,7 @@ export class ConditionalGetInterceptor implements NestInterceptor {
     return next
       .handle()
       .pipe(
-        switchMap((body: unknown) =>
-          applyConditionalGet(request, response, body) ? EMPTY : of(body),
-        ),
+        map((body: unknown) => (applyConditionalGet(request, response, body) ? undefined : body)),
       );
   }
 }

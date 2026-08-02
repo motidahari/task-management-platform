@@ -9,7 +9,7 @@ export interface ConditionalGetRequestLike {
 
 export interface ConditionalGetResponseLike {
   set(name: string, value: string): unknown;
-  status(statusCode: number): { end(): unknown };
+  status(statusCode: number): unknown;
 }
 
 /**
@@ -21,10 +21,13 @@ export interface ConditionalGetResponseLike {
  * until the window lapses — and the ETag turns that revalidation into an
  * empty-body 304 whenever the payload has not actually changed.
  *
- * Always sets the caching headers. Returns `true` once it has already
- * answered the request itself (a 304, nothing left to send); returns `false`
- * to tell the caller its 200 body still needs writing — this function never
- * writes a 200 body, since it has no opinion on how the caller wants to shape
+ * Always sets the caching headers. On a match it also sets the 304 status,
+ * but deliberately stops there — it never writes or ends the response, so
+ * the framework's own response-completion path is the only thing that ever
+ * sends a byte for this request. Returns `true` to tell the caller the
+ * request is already answered and no body should be sent; `false` to tell
+ * the caller its 200 body still needs writing — this function never writes a
+ * 200 body either, since it has no opinion on how the caller wants to shape
  * one (json, a stream, etc).
  */
 export function applyConditionalGet(
@@ -38,7 +41,7 @@ export function applyConditionalGet(
   response.set('ETag', etag);
 
   if (request.headers[IF_NONE_MATCH_HEADER] === etag) {
-    response.status(NOT_MODIFIED).end();
+    response.status(NOT_MODIFIED);
     return true;
   }
 
