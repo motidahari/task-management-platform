@@ -35,6 +35,88 @@ function findTaskType(
   return taskType;
 }
 
+interface CapturedLogLine {
+  readonly record: Record<string, unknown>;
+}
+
+const LOG_WAIT_TIMEOUT_MS = 2000;
+const LOG_WAIT_POLL_INTERVAL_MS = 10;
+
+/**
+ * The app logs through `Logger`'s default sink, which writes one JSON line
+ * per event straight to `process.stdout`/`process.stderr` — the same real
+ * sink production reads from, with no test seam to swap it for a capturing
+ * one at this layer. Spying on both streams observes exactly what an
+ * operator's log collector would. A stream can also carry lines that never
+ * came from `Logger` (a Node warning, Nest's own colored bootstrap banner),
+ * so a line that fails to parse as JSON is skipped rather than failing the
+ * capture outright.
+ */
+function captureLogLines(): { readonly logs: CapturedLogLine[]; readonly restore: () => void } {
+  const logs: CapturedLogLine[] = [];
+  const capture = (chunk: unknown): boolean => {
+    const record = parseLogLine(chunk);
+
+    if (record) {
+      logs.push({ record });
+    }
+
+    return true;
+  };
+
+  const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(capture);
+  const stderrSpy = jest.spyOn(process.stderr, 'write').mockImplementation(capture);
+
+  return {
+    logs,
+    restore: () => {
+      stdoutSpy.mockRestore();
+      stderrSpy.mockRestore();
+    },
+  };
+}
+
+function parseLogLine(chunk: unknown): Record<string, unknown> | undefined {
+  try {
+    return JSON.parse(String(chunk)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `requestContextMiddleware` logs this line from the response's `finish`
+ * event, which — on the buggy short-circuit this spec guards against — fires
+ * *after* the phantom second response attempt has already run. Waiting for
+ * it (rather than for the awaited HTTP response, which resolves the moment
+ * the first, correct write reaches the client) is what makes the capture
+ * window actually include that later failure instead of missing it by a few
+ * microtasks.
+ */
+async function waitForRequestCompletedLog(
+  logs: readonly CapturedLogLine[],
+  requestId: string,
+): Promise<CapturedLogLine> {
+  const deadline = Date.now() + LOG_WAIT_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const match = logs.find(
+      (line) => line.record.scope === 'HttpRequest' && line.record.requestId === requestId,
+    );
+
+    if (match) {
+      return match;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, LOG_WAIT_POLL_INTERVAL_MS));
+  }
+
+  throw new Error(
+    `Timed out waiting for a "Request completed" log line for request ${requestId}. ` +
+      `Captured so far: ${JSON.stringify(logs.map((line) => line.record))}`,
+  );
+}
+
 describe('Task types endpoint', () => {
   const BASE_CONFIG: AppConfig = {
     nodeEnv: 'test',
@@ -186,6 +268,52 @@ describe('Task types endpoint', () => {
           .expect(304);
 
         expect(revalidationResponse.text).toBe('');
+      });
+
+      it('should keep the ETag and Cache-Control identical to the 200 it revalidates', async () => {
+        const firstResponse = await request(app.getHttpServer())
+          .get('/api/v1/task-types')
+          .expect(200);
+        const etag = firstResponse.headers.etag as string;
+
+        const revalidationResponse = await request(app.getHttpServer())
+          .get('/api/v1/task-types')
+          .set('If-None-Match', etag)
+          .expect(304);
+
+        expect(revalidationResponse.headers.etag).toBe(etag);
+        expect(revalidationResponse.headers['cache-control']).toBe(
+          firstResponse.headers['cache-control'],
+        );
+      });
+
+      it('should serve it without logging an error-level line, since the request succeeded', async () => {
+        const { logs, restore } = captureLogLines();
+
+        try {
+          const firstResponse = await request(app.getHttpServer())
+            .get('/api/v1/task-types')
+            .expect(200);
+          const etag = firstResponse.headers.etag as string;
+          const primingRequestId = firstResponse.headers['x-request-id'] as string;
+
+          const revalidationResponse = await request(app.getHttpServer())
+            .get('/api/v1/task-types')
+            .set('If-None-Match', etag)
+            .expect(304);
+          const revalidationRequestId = revalidationResponse.headers['x-request-id'] as string;
+
+          // Confirms the capture actually observed both requests, so an empty
+          // (or prematurely-restored) capture can never be misread as clean.
+          await waitForRequestCompletedLog(logs, primingRequestId);
+          await waitForRequestCompletedLog(logs, revalidationRequestId);
+        } finally {
+          restore();
+        }
+
+        const errorLines = logs.filter((line) => line.record.level === 'error');
+
+        expect(errorLines).toEqual([]);
       });
     });
 
