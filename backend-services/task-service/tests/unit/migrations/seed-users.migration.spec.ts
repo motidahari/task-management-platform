@@ -2,12 +2,14 @@ import type { QueryRunner } from 'typeorm';
 
 import { SeedUsers1700000000002 } from '../../../src/migrations/1700000000002-SeedUsers';
 
-const DEMO_USER_IDS = [
-  '10000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000002',
-  '10000000-0000-4000-8000-000000000003',
-  '10000000-0000-4000-8000-000000000004',
+const DEMO_USER_EMAILS = [
+  'alice@demo.local',
+  'bob@demo.local',
+  'carol@demo.local',
+  'dana@demo.local',
 ];
+
+const UUID_LITERAL_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function fakeQueryRunner(): { queryRunner: QueryRunner; query: jest.Mock } {
   const query = jest.fn().mockResolvedValue(undefined);
@@ -15,57 +17,80 @@ function fakeQueryRunner(): { queryRunner: QueryRunner; query: jest.Mock } {
   return { queryRunner: { query } as unknown as QueryRunner, query };
 }
 
-function executedStatements(query: jest.Mock): string[] {
-  return query.mock.calls.map(([sql]: [string]) => sql);
+function executedCalls(query: jest.Mock): [sql: string, params: unknown[] | undefined][] {
+  return query.mock.calls as [sql: string, params: unknown[] | undefined][];
+}
+
+function findCall(
+  query: jest.Mock,
+  sqlFragment: string,
+): [sql: string, params: unknown[] | undefined] {
+  const call = executedCalls(query).find(([sql]) => sql.includes(sqlFragment));
+
+  if (!call) {
+    throw new Error(`no executed statement contains "${sqlFragment}"`);
+  }
+
+  return call;
 }
 
 describe('SeedUsers1700000000002', () => {
   describe('Given:a fresh database, When:the migration runs up()', () => {
-    it('should insert exactly the four demo users', async () => {
+    it('should insert exactly four rows', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().up(queryRunner);
 
-      const statement = executedStatements(query).find((sql) => sql.includes('INSERT INTO users'));
-      const rowCount = statement?.match(/\(\s*'[0-9a-f-]+',/g)?.length;
+      const [, params] = findCall(query, 'INSERT INTO users');
+      const columnsPerRow = 2;
 
-      expect(rowCount).toBe(4);
+      expect((params ?? []).length / columnsPerRow).toBe(4);
     });
 
-    it('should insert each fixed demo user id', async () => {
+    it('should pass each seeded email as a query parameter, not interpolated into the SQL', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().up(queryRunner);
 
-      const statement = executedStatements(query).find((sql) => sql.includes('INSERT INTO users'));
+      const [statement, params] = findCall(query, 'INSERT INTO users');
 
-      DEMO_USER_IDS.forEach((id) => {
-        expect(statement).toContain(id);
+      DEMO_USER_EMAILS.forEach((email) => {
+        expect(params).toContain(email);
+        expect(statement).not.toContain(email);
       });
     });
 
-    it('should be idempotent via ON CONFLICT DO NOTHING on id', async () => {
+    it('should be idempotent via ON CONFLICT (email) DO NOTHING', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().up(queryRunner);
 
-      const statement = executedStatements(query).find((sql) => sql.includes('INSERT INTO users'));
+      const [statement] = findCall(query, 'INSERT INTO users');
 
-      expect(statement).toContain('ON CONFLICT (id) DO NOTHING');
+      expect(statement).toContain('ON CONFLICT (email) DO NOTHING');
+    });
+
+    it('should never hand-write a uuid literal into the executed SQL', async () => {
+      const { queryRunner, query } = fakeQueryRunner();
+
+      await new SeedUsers1700000000002().up(queryRunner);
+
+      executedCalls(query).forEach(([statement]) => {
+        expect(statement).not.toMatch(UUID_LITERAL_PATTERN);
+      });
     });
   });
 
   describe('Given:a seeded database, When:the migration runs down()', () => {
-    it('should delete exactly the four fixed demo user ids', async () => {
+    it('should delete exactly the seeded demo user emails, passed as a query parameter', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().down(queryRunner);
 
-      const statement = executedStatements(query).find((sql) => sql.includes('DELETE FROM users'));
+      const [statement, params] = findCall(query, 'DELETE FROM users');
 
-      DEMO_USER_IDS.forEach((id) => {
-        expect(statement).toContain(id);
-      });
+      expect(params).toEqual([DEMO_USER_EMAILS]);
+      expect(statement).not.toMatch(UUID_LITERAL_PATTERN);
     });
   });
 });

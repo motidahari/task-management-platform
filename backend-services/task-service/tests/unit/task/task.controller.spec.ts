@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Task } from '../../../src/domain/task.model';
 import { ChangeStatusDto } from '../../../src/task/dto/change-status.dto';
 import { CreateTaskDto } from '../../../src/task/dto/create-task.dto';
@@ -6,8 +8,8 @@ import { TaskController } from '../../../src/task/task.controller';
 import type { TaskService } from '../../../src/task/task.service';
 import type { TaskTypeRegistry } from '../../../src/task-type/task-type.registry';
 
-const TASK_ID = '11111111-1111-1111-1111-111111111111';
-const ASSIGNEE_ID = '22222222-2222-2222-2222-222222222222';
+const TASK_ID = randomUUID();
+const ASSIGNEE_ID = randomUUID();
 
 function fakeTask(overrides: Partial<{ status: number; type: string }> = {}): Task {
   return new Task({

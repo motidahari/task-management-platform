@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto';
+
 import type { TaskPageDto } from '../../../src/task/dto/task-page.dto';
 import { UserNotFoundException } from '../../../src/task/exception/user-not-found.exception';
 import type { UserPageDto } from '../../../src/user/dto/user-page.dto';
 import { UserController } from '../../../src/user/user.controller';
 import type { UserService } from '../../../src/user/user.service';
 
-const USER_ID = '11111111-1111-1111-1111-111111111111';
+const USER_ID = randomUUID();
 
 interface UserServiceMock {
   listUsers: jest.Mock;

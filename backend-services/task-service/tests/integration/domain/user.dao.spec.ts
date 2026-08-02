@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { ValidationException } from '@core/shared';
 import { NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -70,9 +72,7 @@ describeAgainstRealDatabase('UserDao, Given:a reachable Postgres instance', () =
 
   describe('Given:no user with that id, When:getById is called', () => {
     it('should throw NotFoundException', async () => {
-      await expect(userDao.getById('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(userDao.getById(randomUUID())).rejects.toThrow(NotFoundException);
     });
   });
 
