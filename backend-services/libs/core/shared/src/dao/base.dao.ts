@@ -146,8 +146,10 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
    *
    * `direction` fixes the comparison too: a `DESC` page walks strictly
    * *before* the cursor (`<`), an `ASC` page strictly *after* it (`>`). `id`
-   * is the tie-breaker on rows sharing one `createdAt`, so a page boundary
-   * landing between two same-millisecond rows neither skips nor repeats one.
+   * is the tie-breaker on rows sharing one `createdAt` down to the
+   * microsecond, so a page boundary landing between two such rows neither
+   * skips nor repeats one — `keyOf` must supply that same full precision, or
+   * the tie-break silently loses whichever digits it dropped.
    *
    * Reads run on the replica-capable connection — keyset listings tolerate lag.
    */
@@ -172,8 +174,11 @@ export abstract class BaseDao<TEntity extends ObjectLiteral, TDomain> {
     applyFilter(queryBuilder);
 
     if (afterCursor) {
+      // Explicit cast: the cursor carries the boundary as microsecond-precision
+      // text (a JS `Date` parameter would round-trip through millisecond
+      // precision and silently reopen the bug this cast exists to prevent).
       queryBuilder.andWhere(
-        `(${alias}.createdAt, ${alias}.id) ${comparator} (:cursorCreatedAt, :cursorId)`,
+        `(${alias}.createdAt, ${alias}.id) ${comparator} (:cursorCreatedAt::timestamptz, :cursorId)`,
         { cursorCreatedAt: afterCursor.createdAt, cursorId: afterCursor.id },
       );
     }

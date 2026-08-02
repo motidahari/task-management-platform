@@ -205,6 +205,34 @@ describe('Select', () => {
     });
   });
 
+  describe('Given:a long option list', () => {
+    const manyOptions = Array.from({ length: 22 }, (_, index) => ({
+      value: `user-${index}`,
+      label: `User ${index}`,
+    }));
+
+    it('should render every option rather than truncating the list', () => {
+      renderSelect({ options: manyOptions });
+
+      fireEvent.click(screen.getByLabelText('Type'));
+
+      expect(screen.getAllByRole('option')).toHaveLength(manyOptions.length);
+    });
+
+    it('should scroll the active option into view when arrowing past the visible window', () => {
+      renderSelect({ options: manyOptions });
+
+      const trigger = screen.getByLabelText('Type');
+      fireEvent.click(trigger);
+      const scrollIntoViewSpy = vi.spyOn(HTMLLIElement.prototype, 'scrollIntoView');
+
+      fireEvent.keyDown(trigger, { key: 'End' });
+
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(trigger).toHaveAttribute('aria-activedescendant', 'type-option-user-21');
+    });
+  });
+
   describe('Given:disabled is true', () => {
     it('should not open the panel when clicked', () => {
       renderSelect({ disabled: true });

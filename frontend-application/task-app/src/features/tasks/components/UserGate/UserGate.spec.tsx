@@ -48,6 +48,30 @@ describe('UserGate', () => {
     });
   });
 
+  describe('Given:a directory long enough to scroll', () => {
+    const manyUsers: readonly User[] = Array.from({ length: 22 }, (_, index) => ({
+      id: `u-${index}`,
+      name: `User ${index}`,
+      email: `user-${index}@demo.local`,
+    }));
+
+    it('should still render every user rather than truncating the list', () => {
+      render(
+        <UserGate
+          users={manyUsers}
+          isLoading={false}
+          hasError={false}
+          onConnect={vi.fn()}
+          onRetry={vi.fn()}
+        />,
+      );
+
+      manyUsers.forEach((user) => {
+        expect(screen.getByTestId(`user-gate-connect-${user.id}`)).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('Given:the directory is loading', () => {
     it('should render skeleton placeholders instead of the connect options', () => {
       render(

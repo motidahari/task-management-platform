@@ -112,7 +112,7 @@ export class TaskDao extends BaseDao<TaskEntity, Task> {
           queryBuilder.andWhere('task.isClosed = :isClosed', { isClosed });
         }
       },
-      keyOf: (task) => ({ createdAt: task.createdAt, id: task.id }),
+      keyOf: (task) => ({ createdAt: toMicrosecondIso(task.createdAtRaw), id: task.id }),
     });
   }
 
