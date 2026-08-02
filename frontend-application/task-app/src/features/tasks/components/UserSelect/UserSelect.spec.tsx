@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
@@ -61,6 +61,38 @@ describe('UserSelect', () => {
       fireEvent.click(screen.getByLabelText('Assignee'));
 
       expect(screen.getByRole('option', { name: 'Select a user' })).toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the picker is open', () => {
+    it('should render an avatar beside each user option', () => {
+      renderUserSelect();
+
+      fireEvent.click(screen.getByLabelText('Assignee'));
+
+      const option = screen.getByRole('option', { name: 'Alice' });
+      expect(within(option).getByRole('img', { hidden: true })).toBeInTheDocument();
+    });
+  });
+
+  describe('Given:a user is selected', () => {
+    it('should render that user’s avatar in the trigger beside their name', () => {
+      renderUserSelect({ value: 'u-1' });
+
+      const trigger = screen.getByLabelText('Assignee');
+
+      expect(within(trigger).getByRole('img', { hidden: true })).toBeInTheDocument();
+      expect(trigger).toHaveTextContent('Alice');
+    });
+  });
+
+  describe('Given:no user is selected', () => {
+    it('should render the trigger with no avatar', () => {
+      renderUserSelect({ placeholder: 'Select a user' });
+
+      const trigger = screen.getByLabelText('Assignee');
+
+      expect(within(trigger).queryByRole('img', { hidden: true })).not.toBeInTheDocument();
     });
   });
 });

@@ -40,8 +40,7 @@
   }
 }
 
-.my-tasks-view__current-user {
-  @include mixins.flx($align: center, $gap: vars.$spacing-sm);
+.my-tasks-view__user-picker {
   flex: 1;
 }
 

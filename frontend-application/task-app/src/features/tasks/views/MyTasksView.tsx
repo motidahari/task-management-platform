@@ -254,8 +254,7 @@ export function MyTasksView(): ReactElement {
       ) : (
         <>
           <section className="my-tasks-view__toolbar">
-            <div className="my-tasks-view__current-user">
-              <Avatar seed={selectedUserId} alt={resolveAssigneeName(selectedUserId)} size={32} />
+            <div className="my-tasks-view__user-picker">
               <UserSelect
                 id="my-tasks-view-user"
                 label={t('user-picker-label')}
