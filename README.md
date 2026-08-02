@@ -125,6 +125,90 @@ reconciles. Payloads carry a fixed-length microsecond `updatedAt`; the client
 uses it as a staleness guard so an out-of-order event never overwrites newer
 state.
 
+## Design decisions
+
+The four choices that shape everything else, and why each was made this way.
+
+### Custom-field storage
+
+Custom fields live in **one `jsonb` column on `tasks`** (`custom_fields`), keyed
+by the field names the type itself declares. A forward move shallow-merges the
+newly validated fields into it, so the column always holds the union of
+everything the task has supplied so far; each transition also snapshots exactly
+the fields it supplied into the history row's own `fields_snapshot jsonb`.
+
+| Option                              | Why not                                                                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| One column per field                | Adding a task type — a data change everywhere else — would need a schema migration, and the table grows a column for every field of every type. |
+| Side EAV table (`task_field_value`) | Every task read becomes a join plus a pivot, and typing is lost: one `value` column has to hold both strings and numbers.                       |
+| **Single `jsonb` column**           | Types stay declarative, reads stay single-row, and Postgres keeps the values typed inside the document.                                         |
+
+A schemaless column means the shape is not enforced by the database, so it is
+enforced in one place instead: `FieldValidatorService` checks the submitted
+payload against the **target status's** declared descriptors — required fields
+present, string `maxLength` (rejected, never truncated) and `pattern`, numbers
+finite and within `min`/`max` — and accepts no key the target status did not
+declare. It runs on **forward moves only**: a backward move re-enters a status
+the task already satisfied, so there is nothing new to prove. Values are
+sanitized on the way in, and everything wrong is reported at once so a client
+fixing its payload needs one round trip rather than one per mistake.
+
+### Status semantics
+
+`status` is a plain `int` and is an **ordinal within a type** — the position of
+the status in that type's declared list. Status 2 of `procurement` and status 2
+of `development` are unrelated; any view that compares or aggregates raw status
+numbers across types is meaningless. The wire response therefore always carries
+the resolved status name alongside the number, and the client renders the name.
+
+The **final status is derived** as the last status a type declares — it is never
+stored on the task, never a column, and never written in a definition. A type
+that gains a fifth status gets a new final status for free, and no row has to be
+back-filled.
+
+### Transition rules as implemented
+
+This is the reading taken of "backward moves are always allowed" — stated
+explicitly, because it is an interpretation:
+
+| Direction    | Target       | Field validation                | Notes                                                                      |
+| ------------ | ------------ | ------------------------------- | -------------------------------------------------------------------------- |
+| **Forward**  | `status + 1` | Target status's required fields | Past the final status is rejected.                                         |
+| **Backward** | `status - 1` | None                            | Always _permitted_ — but still exactly one step, and never below status 1. |
+
+"Always allowed" is read as _always permitted_, not _free movement_: a backward
+move needs no fields and no precondition beyond the task being open, yet it is
+still a single step and can never skip a status. Both directions go through the
+same arithmetic, so neither can jump. Every change records the next assigned
+user and appends a history row inside the same transaction as the update.
+
+Closing is separate and terminal: a task may be closed only while sitting at its
+type's final status, and a closed task rejects every further transition.
+
+### Pagination
+
+Keyset (cursor), never OFFSET. `OFFSET n` makes the database walk and discard
+`n` rows, so page cost grows with page depth; a keyset page is a single index
+range scan and stays O(log n) at any table size. Cursors are opaque to clients
+and validated on decode — a malformed cursor is a `400 VALIDATION_ERROR`, never
+a silently wrong page.
+
+That only holds while **each index's column order and direction match its query
+exactly**, so they are declared in pairs:
+
+| Read                    | Order                      | Index                                                               |
+| ----------------------- | -------------------------- | ------------------------------------------------------------------- |
+| A user's tasks          | `created_at DESC, id DESC` | `(assigned_user_id, created_at DESC, id DESC)` — all-DESC, matching |
+| A user's **open** tasks | same                       | the same columns, partial `WHERE is_closed = false`                 |
+| A task's history        | `created_at ASC, id ASC`   | `(task_id, created_at, id)`                                         |
+
+A mismatched direction turns the range scan into a filter plus a sort. `id` is
+in every key as the tiebreaker: two rows can share a `created_at` to the
+millisecond, and without it a page boundary can skip or duplicate a row. The
+open-tasks index is partial because closed tasks accumulate without bound while
+"my open tasks" is the default view — the hot index stays proportional to the
+small working set instead of the whole table.
+
 ## Adding a third task type
 
 The engine is type-agnostic, so a new type is added declaratively — **no engine
