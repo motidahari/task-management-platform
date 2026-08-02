@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import { Outlet, useMatch, useNavigate, useParams } from 'react-router';
 
 import { useBus } from '../../../core/bus/useBus';
-import { Avatar } from '../../../shared/components/Avatar';
 import { Button } from '../../../shared/components/Button';
 import { useTranslation } from '../../../shared/hooks/useTranslation';
 import { TaskList } from '../components/TaskList';
@@ -201,8 +200,7 @@ export function MyTasksView(): ReactElement {
       ) : (
         <>
           <section className="my-tasks-view__toolbar">
-            <div className="my-tasks-view__current-user">
-              <Avatar seed={userId} alt={resolveAssigneeName(userId)} size={32} />
+            <div className="my-tasks-view__user-picker">
               <UserSelect
                 id="my-tasks-view-user"
                 label={t('user-picker-label')}
