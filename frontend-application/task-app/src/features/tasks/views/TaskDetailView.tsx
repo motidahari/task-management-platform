@@ -116,7 +116,10 @@ export function TaskDetailView(): ReactElement {
     if (taskId !== '') void fetchTask(taskId);
   }, [taskId, fetchTask]);
 
-  const closeDrawer = useCallback(() => void navigate('/'), [navigate]);
+  // `..` — not `/` — because this route nests one level under the user's
+  // list (`/users/:userId/tasks/:taskId`): trimming one route segment lands
+  // back on that list, not the root gate.
+  const closeDrawer = useCallback(() => void navigate('..'), [navigate]);
 
   // An unresolved type means the metadata itself is stale or incomplete, not
   // the task — refetching the task alone could never fix it, so this reloads

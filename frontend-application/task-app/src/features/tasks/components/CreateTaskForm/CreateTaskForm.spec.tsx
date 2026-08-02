@@ -46,11 +46,9 @@ describe('CreateTaskForm', () => {
     };
     const currentUserState: CurrentUserStoreState = {
       users,
-      selectedUserId: null,
       isLoading: false,
       error: null,
       fetchUsers: vi.fn(),
-      selectUser: vi.fn(),
       reset: vi.fn(),
     };
     const taskState: TaskStoreState = {

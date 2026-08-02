@@ -1,6 +1,6 @@
 import { ErrorCode } from '@core/shared/error-codes';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bus } from '../../../core/bus/bus';
@@ -41,16 +41,13 @@ const definitions: readonly TaskTypeDefinition[] = [
 
 function mockCurrentUserStore(
   overrides: Partial<CurrentUserStoreState> = {},
-): Pick<CurrentUserStoreState, 'fetchUsers' | 'selectUser'> {
+): Pick<CurrentUserStoreState, 'fetchUsers'> {
   const fetchUsers = vi.fn();
-  const selectUser = vi.fn();
   const state: CurrentUserStoreState = {
     users,
-    selectedUserId: null,
     isLoading: false,
     error: null,
     fetchUsers,
-    selectUser,
     reset: vi.fn(),
     ...overrides,
   };
@@ -59,7 +56,7 @@ function mockCurrentUserStore(
     (selector: (state: CurrentUserStoreState) => unknown) => selector(state),
   );
 
-  return { fetchUsers, selectUser };
+  return { fetchUsers };
 }
 
 function mockTaskStore(
@@ -106,10 +103,14 @@ function mockTaskTypeStore(): void {
   );
 }
 
-function renderMyTasksView(initialPath = '/'): ReturnType<typeof render> {
+function renderMyTasksView(initialPath = '/users/u-1'): ReturnType<typeof render> {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <MyTasksView />
+      <Routes>
+        <Route path="/users/:userId" element={<MyTasksView />}>
+          <Route path="tasks/:taskId" element={<></>} />
+        </Route>
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -131,95 +132,95 @@ describe('MyTasksView', () => {
     });
   });
 
-  describe('Given:no user is selected yet', () => {
-    it('should render every user as a connect option instead of the toolbar or the task list', () => {
-      mockCurrentUserStore({ selectedUserId: null });
+  describe('Given:the user directory is still loading', () => {
+    it('should render the gate’s loading state instead of the toolbar or the task list', () => {
+      mockCurrentUserStore({ isLoading: true });
       mockTaskStore();
 
       renderMyTasksView();
 
-      expect(screen.getByTestId('my-tasks-view-user-gate')).toBeInTheDocument();
-      expect(screen.getByText('Alice')).toBeInTheDocument();
-      expect(screen.getByText('Bob')).toBeInTheDocument();
+      expect(screen.getByTestId('user-gate')).toBeInTheDocument();
       expect(screen.queryByTestId('task-list')).not.toBeInTheDocument();
       expect(screen.queryByTestId('my-tasks-view-create-task')).not.toBeInTheDocument();
     });
-
-    it('should select the user whose connect button is clicked', () => {
-      const { selectUser } = mockCurrentUserStore({ selectedUserId: null });
-      mockTaskStore();
-
-      renderMyTasksView();
-      fireEvent.click(screen.getByTestId('my-tasks-view-connect-u-2'));
-
-      expect(selectUser).toHaveBeenCalledWith('u-2');
-    });
   });
 
-  describe('Given:no user is selected yet and the user list is loading', () => {
-    it('should render skeleton placeholders instead of the connect options', () => {
-      mockCurrentUserStore({ selectedUserId: null, isLoading: true });
-      mockTaskStore();
-
-      renderMyTasksView();
-
-      expect(screen.getByTestId('my-tasks-view-user-gate')).toBeInTheDocument();
-      expect(screen.queryByText('Alice')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('my-tasks-view-connect-u-1')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Given:no user is selected yet and the user list failed to load', () => {
-    it('should render an inline recovery state that re-calls fetchUsers on retry', () => {
+  describe('Given:the user directory failed to load', () => {
+    it('should render an inline recovery state that re-calls fetchUsers on retry, never a blank list', () => {
       const { fetchUsers } = mockCurrentUserStore({
-        selectedUserId: null,
         error: { errorCode: ErrorCode.INTERNAL_ERROR, status: 500, isNetworkError: false },
       });
       mockTaskStore();
 
       renderMyTasksView();
 
-      expect(screen.queryByText('Alice')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('my-tasks-view-gate-retry'));
+      expect(screen.queryByTestId('task-list')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('user-gate-retry'));
 
       // Once from the mount effect, once from the retry click.
       expect(fetchUsers).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('Given:a user is selected', () => {
-    it('should fetch the first page of open tasks for that user and render the toolbar and task list', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
-      const { fetchTasksForUser } = mockTaskStore();
+  describe('Given:the route’s user id isn’t in the loaded directory', () => {
+    it('should render the gate’s error path instead of a blank task list', () => {
+      mockCurrentUserStore();
+      mockTaskStore();
 
-      renderMyTasksView();
+      renderMyTasksView('/users/unknown-user');
 
-      expect(fetchTasksForUser).toHaveBeenCalledWith('u-1', { isClosed: false });
-      expect(screen.getByTestId('task-list')).toBeInTheDocument();
-      expect(screen.queryByTestId('my-tasks-view-user-gate')).not.toBeInTheDocument();
+      expect(screen.getByTestId('user-gate')).toBeInTheDocument();
+      expect(screen.getByTestId('user-gate-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('task-list')).not.toBeInTheDocument();
     });
   });
 
-  describe('Given:a user is selected and the closed filter is toggled', () => {
-    it('should refetch the first page with isClosed true', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+  describe('Given:the route’s user id is known', () => {
+    it('should fetch the first page of open tasks for that user and render the toolbar and task list', () => {
+      mockCurrentUserStore();
       const { fetchTasksForUser } = mockTaskStore();
 
-      renderMyTasksView();
+      renderMyTasksView('/users/u-1');
+
+      expect(fetchTasksForUser).toHaveBeenCalledWith('u-1', { isClosed: false });
+      expect(screen.getByTestId('task-list')).toBeInTheDocument();
+      expect(screen.queryByTestId('user-gate')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Given:the route’s user id is known and the closed filter is toggled', () => {
+    it('should refetch the first page with isClosed true', () => {
+      mockCurrentUserStore();
+      const { fetchTasksForUser } = mockTaskStore();
+
+      renderMyTasksView('/users/u-1');
       fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', { isClosed: true });
     });
   });
 
+  describe('Given:a different user is picked from the toolbar', () => {
+    it('should load that user’s tasks instead of the previous one’s', () => {
+      mockCurrentUserStore();
+      const { fetchTasksForUser } = mockTaskStore();
+
+      renderMyTasksView('/users/u-1');
+      fireEvent.click(screen.getByLabelText('my-tasks-view.user-picker-label'));
+      fireEvent.click(screen.getByRole('option', { name: 'Bob' }));
+
+      expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-2', { isClosed: false });
+    });
+  });
+
   describe('Given:the create-task button is clicked', () => {
     it('should open the create-task modal via the bus', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockCurrentUserStore();
       mockTaskStore();
       const modalOpenHandler = vi.fn();
       const unsubscribe = bus.on('modal:open', modalOpenHandler);
 
-      renderMyTasksView();
+      renderMyTasksView('/users/u-1');
       fireEvent.click(screen.getByTestId('my-tasks-view-create-task'));
 
       expect(modalOpenHandler).toHaveBeenCalledWith({ id: 'create-task', props: {} });
@@ -227,9 +228,9 @@ describe('MyTasksView', () => {
     });
   });
 
-  describe('Given:a user is selected and their tasks are assigned to known and unknown users', () => {
+  describe('Given:the route’s user id is known and their tasks are assigned to known and unknown users', () => {
     it('should resolve each row’s assignee to a name, falling back to the raw id for an assignee outside the loaded directory', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockCurrentUserStore();
       mockTaskStore({
         items: [
           {
@@ -257,7 +258,7 @@ describe('MyTasksView', () => {
         ],
       });
 
-      renderMyTasksView();
+      renderMyTasksView('/users/u-1');
 
       const taskList = screen.getByTestId('task-list');
       expect(within(taskList).getByText('Alice')).toBeInTheDocument();
@@ -265,7 +266,7 @@ describe('MyTasksView', () => {
     });
 
     it('should resolve each row’s type to the loaded type metadata’s display name', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockCurrentUserStore();
       mockTaskStore({
         items: [
           {
@@ -282,15 +283,15 @@ describe('MyTasksView', () => {
         ],
       });
 
-      renderMyTasksView();
+      renderMyTasksView('/users/u-1');
 
       expect(screen.getByText('Development')).toBeInTheDocument();
     });
   });
 
-  describe('Given:a user is selected and the current URL is the detail route for one of their tasks', () => {
+  describe('Given:the route’s user id is known and the current URL is the detail route for one of their tasks', () => {
     it('should highlight that row in the task table', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockCurrentUserStore();
       mockTaskStore({
         items: [
           {
@@ -307,16 +308,16 @@ describe('MyTasksView', () => {
         ],
       });
 
-      renderMyTasksView('/tasks/t-1');
+      renderMyTasksView('/users/u-1/tasks/t-1');
 
       const row = screen.getByTitle('t-1').closest('tr');
       expect(row).toHaveAttribute('aria-selected', 'true');
     });
   });
 
-  describe('Given:a user is selected and the server reports a next page', () => {
+  describe('Given:the route’s user id is known and the server reports a next page', () => {
     it('should fetch the next page with the stored cursor on "load more"', () => {
-      mockCurrentUserStore({ selectedUserId: 'u-1' });
+      mockCurrentUserStore();
       const { fetchTasksForUser } = mockTaskStore({
         items: [
           {
@@ -334,7 +335,7 @@ describe('MyTasksView', () => {
         nextCursor: 'cursor-1',
       });
 
-      renderMyTasksView();
+      renderMyTasksView('/users/u-1');
       fireEvent.click(screen.getByTestId('task-list-load-more'));
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', {
