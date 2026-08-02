@@ -1,43 +1,44 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Fixed, hand-picked UUIDs (not `gen_random_uuid()`) so every environment —
- * local, CI, staging — ends up with the same four user ids. That lets API
- * examples and client fixtures reference a user by id and stay valid
- * anywhere this migration has run.
+ * Demo users seeded into every environment. `id` is left to the column's
+ * `gen_random_uuid()` default, so `email` — already unique-indexed — is the
+ * row's stable identity. That makes this migration idempotent on email
+ * rather than on a hand-picked id, and it means a client learns a seeded
+ * user's id by calling `GET /users`, never by hard-coding one.
  */
 const DEMO_USERS = [
-  { id: '10000000-0000-4000-8000-000000000001', name: 'Alice', email: 'alice@demo.local' },
-  { id: '10000000-0000-4000-8000-000000000002', name: 'Bob', email: 'bob@demo.local' },
-  { id: '10000000-0000-4000-8000-000000000003', name: 'Carol', email: 'carol@demo.local' },
-  { id: '10000000-0000-4000-8000-000000000004', name: 'Dana', email: 'dana@demo.local' },
+  { name: 'Alice', email: 'alice@demo.local' },
+  { name: 'Bob', email: 'bob@demo.local' },
+  { name: 'Carol', email: 'carol@demo.local' },
+  { name: 'Dana', email: 'dana@demo.local' },
 ] as const;
 
-/**
- * Seeds the four fixed-id demo users the API examples and client fixtures
- * key off of. Uses `ON CONFLICT (id) DO NOTHING` so re-running this
- * migration (or applying it against a database that already has the rows,
- * e.g. after a restore) never fails or duplicates data.
- */
+const COLUMNS_PER_ROW = 2;
+
 export class SeedUsers1700000000002 implements MigrationInterface {
   name = 'SeedUsers1700000000002';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    const values = DEMO_USERS.map((user) => `('${user.id}', '${user.name}', '${user.email}')`).join(
-      ',\n        ',
-    );
+    const placeholders = DEMO_USERS.map(
+      (_user, index) => `($${index * COLUMNS_PER_ROW + 1}, $${index * COLUMNS_PER_ROW + 2})`,
+    ).join(',\n        ');
+    const params = DEMO_USERS.flatMap((user) => [user.name, user.email]);
 
-    await queryRunner.query(`
-      INSERT INTO users (id, name, email)
+    await queryRunner.query(
+      `
+      INSERT INTO users (name, email)
       VALUES
-        ${values}
-      ON CONFLICT (id) DO NOTHING
-    `);
+        ${placeholders}
+      ON CONFLICT (email) DO NOTHING
+    `,
+      params,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    const ids = DEMO_USERS.map((user) => `'${user.id}'`).join(', ');
+    const emails = DEMO_USERS.map((user) => user.email);
 
-    await queryRunner.query(`DELETE FROM users WHERE id IN (${ids})`);
+    await queryRunner.query('DELETE FROM users WHERE email = ANY($1)', [emails]);
   }
 }

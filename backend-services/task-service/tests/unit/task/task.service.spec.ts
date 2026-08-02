@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { DataSource, EntityManager } from 'typeorm';
 
 import type { TaskStatusHistoryEntry } from '../../../src/domain/task-status-history.dao';
@@ -19,8 +21,8 @@ import { TaskStateConflictException } from '../../../src/task/exception/task-sta
 import { UnknownTaskTypeException } from '../../../src/task/exception/unknown-task-type.exception';
 import { TaskService } from '../../../src/task/task.service';
 
-const ASSIGNEE_ID = '11111111-1111-1111-1111-111111111111';
-const NEXT_ASSIGNEE_ID = '22222222-2222-2222-2222-222222222222';
+const ASSIGNEE_ID = randomUUID();
+const NEXT_ASSIGNEE_ID = randomUUID();
 const TRANSACTION_MANAGER = {} as EntityManager;
 
 /**
