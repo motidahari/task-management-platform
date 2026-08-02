@@ -14,7 +14,6 @@ export interface ButtonProps {
   readonly type?: 'button' | 'submit';
   readonly loading?: boolean;
   readonly disabled?: boolean;
-  readonly pressed?: boolean;
   readonly onClick?: MouseEventHandler<HTMLButtonElement>;
   readonly testId?: string;
 }
@@ -27,7 +26,6 @@ export function Button({
   type = 'button',
   loading = false,
   disabled = false,
-  pressed,
   onClick,
   testId,
 }: ButtonProps): ReactElement {
@@ -41,7 +39,6 @@ export function Button({
       onClick={onClick}
       disabled={isDisabled}
       aria-busy={loading}
-      aria-pressed={pressed}
       data-testid={testId}
     >
       {loading && <Spinner size="sm" />}

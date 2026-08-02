@@ -115,6 +115,11 @@ function renderMyTasksView(initialPath = '/users/u-1'): ReturnType<typeof render
   );
 }
 
+function selectFilterOption(optionLabel: string): void {
+  fireEvent.click(screen.getByLabelText('my-tasks-view.filter-label'));
+  fireEvent.click(screen.getByRole('option', { name: optionLabel }));
+}
+
 describe('MyTasksView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -187,68 +192,44 @@ describe('MyTasksView', () => {
       expect(screen.queryByTestId('user-gate')).not.toBeInTheDocument();
     });
 
-    it('should expose the All option as pressed and Open/Closed as not pressed', () => {
+    it('should show the All option as the selected filter', () => {
       mockCurrentUserStore();
       mockTaskStore();
 
       renderMyTasksView('/users/u-1');
 
-      expect(screen.getByTestId('my-tasks-view-filter-all')).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-      expect(screen.getByTestId('my-tasks-view-filter-open')).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-      expect(screen.getByTestId('my-tasks-view-filter-closed')).toHaveAttribute(
-        'aria-pressed',
-        'false',
+      expect(screen.getByLabelText('my-tasks-view.filter-label')).toHaveTextContent(
+        'my-tasks-view.filter-all',
       );
     });
   });
 
   describe('Given:the route’s user id is known and the open filter is selected', () => {
-    it('should refetch the first page with isClosed false', () => {
+    it('should refetch the first page with isClosed false and show Open as the selected filter', () => {
       mockCurrentUserStore();
       const { fetchTasksForUser } = mockTaskStore();
 
       renderMyTasksView('/users/u-1');
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-open'));
+      selectFilterOption('my-tasks-view.filter-open');
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', { isClosed: false });
+      expect(screen.getByLabelText('my-tasks-view.filter-label')).toHaveTextContent(
+        'my-tasks-view.filter-open',
+      );
     });
   });
 
   describe('Given:the route’s user id is known and the closed filter is selected', () => {
-    it('should refetch the first page with isClosed true', () => {
+    it('should refetch the first page with isClosed true and show Closed as the selected filter', () => {
       mockCurrentUserStore();
       const { fetchTasksForUser } = mockTaskStore();
 
       renderMyTasksView('/users/u-1');
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
+      selectFilterOption('my-tasks-view.filter-closed');
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', { isClosed: true });
-    });
-
-    it('should expose the Closed option as pressed and All/Open as not pressed', () => {
-      mockCurrentUserStore();
-      mockTaskStore();
-
-      renderMyTasksView('/users/u-1');
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
-
-      expect(screen.getByTestId('my-tasks-view-filter-closed')).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
-      expect(screen.getByTestId('my-tasks-view-filter-all')).toHaveAttribute(
-        'aria-pressed',
-        'false',
-      );
-      expect(screen.getByTestId('my-tasks-view-filter-open')).toHaveAttribute(
-        'aria-pressed',
-        'false',
+      expect(screen.getByLabelText('my-tasks-view.filter-label')).toHaveTextContent(
+        'my-tasks-view.filter-closed',
       );
     });
   });
@@ -259,8 +240,8 @@ describe('MyTasksView', () => {
       const { fetchTasksForUser } = mockTaskStore();
 
       renderMyTasksView('/users/u-1');
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-all'));
+      selectFilterOption('my-tasks-view.filter-closed');
+      selectFilterOption('my-tasks-view.filter-all');
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', { isClosed: undefined });
     });
@@ -432,7 +413,7 @@ describe('MyTasksView', () => {
       });
 
       renderMyTasksView('/users/u-1');
-      fireEvent.click(screen.getByTestId('my-tasks-view-filter-closed'));
+      selectFilterOption('my-tasks-view.filter-closed');
       fireEvent.click(screen.getByTestId('task-list-load-more'));
 
       expect(fetchTasksForUser).toHaveBeenLastCalledWith('u-1', {

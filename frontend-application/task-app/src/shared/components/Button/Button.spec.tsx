@@ -83,18 +83,4 @@ describe('Button', () => {
       expect(screen.getByRole('button')).toBeDisabled();
     });
   });
-
-  describe('Given:a pressed prop', () => {
-    it('should expose aria-pressed matching its value', () => {
-      render(<Button pressed>Save</Button>);
-
-      expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    it('should omit aria-pressed when not given', () => {
-      render(<Button>Save</Button>);
-
-      expect(screen.getByRole('button')).not.toHaveAttribute('aria-pressed');
-    });
-  });
 });

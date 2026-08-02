@@ -19,5 +19,6 @@
 }
 
 .my-tasks-view__filter {
-  @include mixins.flx($gap: vars.$spacing-sm);
+  flex: 0 0 auto;
+  min-width: 10rem;
 }
