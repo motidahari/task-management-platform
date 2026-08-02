@@ -64,7 +64,7 @@ const TASK_DETAIL_PATH = '/users/:userId/tasks/:taskId';
 
 interface TaskListSectionProps {
   readonly userId: string;
-  readonly isClosed: boolean;
+  readonly isClosed: boolean | undefined;
   readonly selectedTaskId: string | undefined;
   readonly resolveAssigneeName: (userId: string) => string;
   readonly resolveTypeDisplayName: (type: string) => string;
@@ -122,7 +122,7 @@ function TaskListSection({
 }
 
 /**
- * The landing screen: connect as a user, filter their tasks open/closed,
+ * The landing screen: connect as a user, filter their tasks all/open/closed,
  * page through them in a table, and create a new one via the modal. Task
  * data itself stays entirely in `useTaskStore`/`useCurrentUserStore` — this
  * view only wires the route-scoped user id and the filter into their
@@ -147,7 +147,7 @@ export function MyTasksView(): ReactElement {
   const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
   const typeDefinitions = useTaskTypeStore((state) => state.definitions);
 
-  const [isClosedFilter, setIsClosedFilter] = useState(false);
+  const [isClosedFilter, setIsClosedFilter] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     void fetchUsers();
@@ -182,6 +182,10 @@ export function MyTasksView(): ReactElement {
     [statusDisplayNamesByKey],
   );
 
+  function isFilterSelected(option: boolean | undefined): boolean {
+    return isClosedFilter === option;
+  }
+
   function openCreateTaskModal(): void {
     emit('modal:open', { id: 'create-task', props: {} });
   }
@@ -213,14 +217,24 @@ export function MyTasksView(): ReactElement {
             </div>
             <div className="my-tasks-view__filter" role="group" aria-label={t('filter-label')}>
               <Button
-                variant={isClosedFilter ? 'secondary' : 'primary'}
+                variant={isFilterSelected(undefined) ? 'primary' : 'secondary'}
+                pressed={isFilterSelected(undefined)}
+                onClick={() => setIsClosedFilter(undefined)}
+                testId="my-tasks-view-filter-all"
+              >
+                {t('filter-all')}
+              </Button>
+              <Button
+                variant={isFilterSelected(false) ? 'primary' : 'secondary'}
+                pressed={isFilterSelected(false)}
                 onClick={() => setIsClosedFilter(false)}
                 testId="my-tasks-view-filter-open"
               >
                 {t('filter-open')}
               </Button>
               <Button
-                variant={isClosedFilter ? 'primary' : 'secondary'}
+                variant={isFilterSelected(true) ? 'primary' : 'secondary'}
+                pressed={isFilterSelected(true)}
                 onClick={() => setIsClosedFilter(true)}
                 testId="my-tasks-view-filter-closed"
               >
