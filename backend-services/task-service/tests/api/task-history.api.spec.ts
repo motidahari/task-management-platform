@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Global, Module, type Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -215,7 +217,7 @@ describeAgainstRealDatabase(
     describe('When:a client requests history for a task id that does not exist', () => {
       it('should answer 404 TASK_NOT_FOUND', async () => {
         const response = await request(app.getHttpServer())
-          .get('/api/v1/tasks/00000000-0000-0000-0000-000000000000/history')
+          .get(`/api/v1/tasks/${randomUUID()}/history`)
           .expect(404);
 
         expect(response.body).toMatchObject({ errorCode: 40400 });

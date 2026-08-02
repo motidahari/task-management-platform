@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { TaskPageDto } from '../../../src/task/dto/task-page.dto';
 import { TaskService } from '../../../src/task/task.service';
 import { UserDao } from '../../../src/domain/user.dao';
@@ -5,7 +7,7 @@ import { User } from '../../../src/domain/user.model';
 import { UserNotFoundException } from '../../../src/task/exception/user-not-found.exception';
 import { UserService } from '../../../src/user/user.service';
 
-const USER_ID = '11111111-1111-1111-1111-111111111111';
+const USER_ID = randomUUID();
 
 function fakeUser(overrides: Partial<{ id: string; name: string; email: string }> = {}): User {
   return new User({

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { ErrorCode } from '@core/shared';
 import { Global, Module, type Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -42,7 +44,7 @@ interface ErrorResponseBody {
 }
 
 /** Well-formed but unassigned — never inserted by any builder in this suite, so it never resolves to a real row. */
-const NONEXISTENT_ID = '00000000-0000-0000-0000-000000000000';
+const NONEXISTENT_ID = randomUUID();
 
 /** Same rationale as `task-lifecycle.api.spec.ts` — see that file for why the whole module is swapped instead of an in-place provider override. */
 function buildRealDatabaseModule(dataSource: DataSource): Type<unknown> {

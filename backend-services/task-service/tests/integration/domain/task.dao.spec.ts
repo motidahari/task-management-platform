@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { ValidationException } from '@core/shared';
 import { NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
@@ -106,7 +108,7 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
     it('should throw NotFoundException', async () => {
       await expect(
         testDatabase.dataSource.transaction((manager) =>
-          taskDao.getByIdForUpdate('00000000-0000-0000-0000-000000000000', manager),
+          taskDao.getByIdForUpdate(randomUUID(), manager),
         ),
       ).rejects.toThrow(NotFoundException);
     });
@@ -132,9 +134,7 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
 
   describe('Given:no task with that id, When:getById is called', () => {
     it('should throw NotFoundException', async () => {
-      await expect(taskDao.getById('00000000-0000-0000-0000-000000000000')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(taskDao.getById(randomUUID())).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -307,9 +307,7 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
 
   describe('Given:no task with that id, When:getByIdOnPrimary is called', () => {
     it('should throw NotFoundException', async () => {
-      await expect(
-        taskDao.getByIdOnPrimary('00000000-0000-0000-0000-000000000000'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(taskDao.getByIdOnPrimary(randomUUID())).rejects.toThrow(NotFoundException);
     });
   });
 
