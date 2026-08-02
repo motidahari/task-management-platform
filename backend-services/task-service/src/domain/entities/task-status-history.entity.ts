@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { utcTimestampTextExpression } from '@core/shared';
+import { Column, Entity, PrimaryColumn, VirtualColumn } from 'typeorm';
 
 /**
  * Persistence mapping only — ORM metadata behind the DAO boundary. Never
@@ -41,4 +42,18 @@ export class TaskStatusHistoryEntity {
 
   @PrimaryColumn({ type: 'timestamptz', name: 'created_at', default: () => 'now()' })
   createdAt!: Date;
+
+  /**
+   * `created_at` projected as UTC text at full stored precision, computed on
+   * every read rather than persisted — the pg driver parses `timestamptz` to
+   * a millisecond-precision `Date` before TypeORM ever sees the row, so the
+   * only way to recover the microseconds Postgres actually stored, which the
+   * keyset cursor must carry to not drop rows sharing one boundary instant,
+   * is to read them back out as text.
+   */
+  @VirtualColumn({
+    type: 'text',
+    query: (alias) => utcTimestampTextExpression(`${alias}.created_at`),
+  })
+  createdAtRaw!: string;
 }

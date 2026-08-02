@@ -76,6 +76,33 @@ async function insertTaskWithPreciseUpdatedAt(
   return { id: row.id };
 }
 
+/**
+ * `insertTaskAt`'s counterpart for `created_at`: a raw text timestamp rather
+ * than a `Date` parameter, so the row can carry sub-millisecond digits a
+ * `Date` cannot hold. This is what actually exercises the keyset cursor's
+ * boundary handling — a `Date`-valued `created_at` always lands on an exact
+ * millisecond, which the cursor would have serialized losslessly even before
+ * it carried microsecond precision, silently hiding a page-boundary bug that
+ * only surfaces once real rows share a sub-millisecond instant.
+ */
+async function insertTaskAtPreciseInstant(
+  dataSource: DataSource,
+  assignedUserId: string,
+  createdAt: string,
+): Promise<InsertedPreciseTaskRow> {
+  const rows: Array<{ id: string }> = await dataSource.query(
+    `INSERT INTO tasks (type, assigned_user_id, created_at) VALUES ($1, $2, $3) RETURNING id`,
+    ['procurement', assignedUserId, createdAt],
+  );
+  const [row] = rows;
+
+  if (!row) {
+    throw new Error('INSERT ... RETURNING produced no row');
+  }
+
+  return { id: row.id };
+}
+
 describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () => {
   const testDatabase = useTestDatabase();
   let taskDao: TaskDao;
@@ -240,15 +267,19 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
     });
   });
 
-  describe('Given:several tasks sharing the exact same created_at right at a page boundary, When:paginating', () => {
+  describe('Given:several tasks sharing the exact same created_at, down to the microsecond, right at a page boundary, When:paginating', () => {
     it('should serve every row exactly once across pages, in stable created_at/id DESC order', async () => {
       const userRepository = testDatabase.dataSource.getRepository(UserEntity);
       const user = await userRepository.save(buildTestUser());
-      const sharedInstant = new Date('2026-02-01T12:00:00.000Z');
+      // Carries a non-zero microsecond fraction deliberately: a `Date`-valued
+      // instant only ever lands on an exact millisecond, which a cursor could
+      // serialize losslessly even truncated to millisecond precision — this
+      // is the shape that actually exercises the boundary.
+      const sharedInstant = '2026-02-01T12:00:00.757772Z';
 
-      await insertTaskAt(testDatabase.dataSource, user.id, sharedInstant);
-      await insertTaskAt(testDatabase.dataSource, user.id, sharedInstant);
-      await insertTaskAt(testDatabase.dataSource, user.id, sharedInstant);
+      await insertTaskAtPreciseInstant(testDatabase.dataSource, user.id, sharedInstant);
+      await insertTaskAtPreciseInstant(testDatabase.dataSource, user.id, sharedInstant);
+      await insertTaskAtPreciseInstant(testDatabase.dataSource, user.id, sharedInstant);
 
       const expectedOrder: Array<{ id: string }> = await testDatabase.dataSource.query(
         `SELECT id FROM tasks WHERE assigned_user_id = $1 ORDER BY created_at DESC, id DESC`,

@@ -34,7 +34,7 @@ interface InsertedUserRow {
 async function insertUserAt(
   dataSource: DataSource,
   overrides: { name: string; email: string },
-  createdAt: Date,
+  createdAt: Date | string,
 ): Promise<InsertedUserRow> {
   const rows: Array<{ id: string; created_at: Date }> = await dataSource.query(
     `INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3) RETURNING id, created_at`,
@@ -79,13 +79,11 @@ describeAgainstRealDatabase('UserDao, Given:a reachable Postgres instance', () =
   describe('Given:more inserted users than fit on one page, When:paginating with a small limit', () => {
     it('should walk every inserted row exactly once, newest-first, agreeing with a created_at/id DESC scan restricted to those rows', async () => {
       const ROW_COUNT = 5;
-      // Spaced 10ms apart (well above 1ms) rather than any smaller gap: the
-      // cursor round-trips `createdAt` through a plain JS `Date`, which only
-      // resolves to millisecond precision, so two rows any closer than that
-      // would tie on the cursor's own resolution even though Postgres itself
-      // stores microseconds. Anchored to "now" (rather than a fixed past
-      // date) so every row here sorts ahead of whatever seed/fixture data
-      // already exists in the table.
+      // Spaced 10ms apart so this test owns a strict, unambiguous newest-first
+      // order to assert on; the exact-same-instant case (several rows tied on
+      // `created_at` down to the microsecond) is covered separately below.
+      // Anchored to "now" (rather than a fixed past date) so every row here
+      // sorts ahead of whatever seed/fixture data already exists in the table.
       const baseTime = Date.now();
       const insertedUsers = await Promise.all(
         Array.from({ length: ROW_COUNT }, (_, index) =>
@@ -137,6 +135,60 @@ describeAgainstRealDatabase('UserDao, Given:a reachable Postgres instance', () =
       expect(orderedInsertedIds).toEqual(expectedOrder);
       expect(new Set(orderedInsertedIds).size).toBe(orderedInsertedIds.length);
       expect(pagesFetched).toBeGreaterThan(1);
+    });
+  });
+
+  describe('Given:several users sharing the exact same created_at, down to the microsecond, right at a page boundary, When:paginating', () => {
+    it('should serve every row exactly once across pages, in stable created_at/id DESC order', async () => {
+      // Carries a non-zero microsecond fraction deliberately: a `Date`-valued
+      // instant only ever lands on an exact millisecond, which a cursor could
+      // serialize losslessly even truncated to millisecond precision — this
+      // is the shape that actually exercises the boundary. Anchored to "now"
+      // so every row here sorts ahead of whatever seed/fixture data already
+      // exists in the table.
+      const sharedInstant = `${new Date().toISOString().replace(/\.\d{3}Z$/, '')}.757772Z`;
+
+      const insertedUsers = await Promise.all(
+        Array.from({ length: 3 }, (_, index) =>
+          insertUserAt(
+            testDatabase.dataSource,
+            {
+              name: `${TEST_RUN_RECORD_PREFIX}tie-${index}`,
+              email: `${TEST_RUN_RECORD_PREFIX}tie-${index}@example.com`,
+            },
+            sharedInstant,
+          ),
+        ),
+      );
+      const insertedIds = insertedUsers.map((user) => user.id);
+
+      const insertedIdSet = new Set(insertedIds);
+      const expectedOrder: Array<{ id: string }> = await testDatabase.dataSource.query(
+        `SELECT id FROM users WHERE id = ANY($1) ORDER BY created_at DESC, id DESC`,
+        [insertedIds],
+      );
+
+      // Walked in a loop rather than two fixed pages, the same convention the
+      // spaced-apart pagination test above uses: it tolerates whatever
+      // unrelated rows land ahead of this test's own on the very first page.
+      const seenIds: string[] = [];
+      let cursor: string | undefined;
+
+      while (seenIds.filter((id) => insertedIdSet.has(id)).length < insertedIds.length) {
+        const page = await userDao.findPage(2, cursor);
+        seenIds.push(...page.items.map((user) => user.id));
+
+        if (!page.nextCursor) {
+          break;
+        }
+
+        cursor = page.nextCursor;
+      }
+
+      const servedIds = seenIds.filter((id) => insertedIdSet.has(id));
+
+      expect(servedIds).toEqual(expectedOrder.map((row) => row.id));
+      expect(new Set(servedIds).size).toBe(insertedIds.length);
     });
   });
 

@@ -27,13 +27,17 @@ interface InsertedHistoryRow {
  * migration already provisioned (the current month, since that always
  * exists) rather than an arbitrary date that could fall outside every
  * partition and fail the insert outright.
+ *
+ * Accepts raw text as well as a `Date`: a `Date` can only ever carry
+ * millisecond precision, so a caller proving cursor behavior at a
+ * sub-millisecond boundary passes the instant as text instead.
  */
 async function insertHistoryAt(
   dataSource: DataSource,
   taskId: string,
   assignedUserId: string,
   toStatus: number,
-  createdAt: Date,
+  createdAt: Date | string,
 ): Promise<InsertedHistoryRow> {
   const rows: Array<{ id: string; created_at: Date }> = await dataSource.query(
     `INSERT INTO task_status_history (task_id, from_status, to_status, assigned_user_id, created_at)
@@ -56,6 +60,17 @@ function withinCurrentPartition(offsetMs: number): Date {
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
   return new Date(startOfMonth.getTime() + offsetMs);
+}
+
+/**
+ * `withinCurrentPartition`'s counterpart carrying a real microsecond
+ * fraction, as raw text rather than a `Date` — a `Date`-valued instant only
+ * ever lands on an exact millisecond, which a cursor could serialize
+ * losslessly even truncated to millisecond precision, hiding a page-boundary
+ * bug that only surfaces once rows actually share a sub-millisecond instant.
+ */
+function withinCurrentPartitionPreciseInstant(microsecondFraction: string): string {
+  return `${withinCurrentPartition(0).toISOString().replace('.000Z', '')}.${microsecondFraction}Z`;
 }
 
 describeAgainstRealDatabase('TaskStatusHistoryDao, Given:a reachable Postgres instance', () => {
@@ -137,10 +152,10 @@ describeAgainstRealDatabase('TaskStatusHistoryDao, Given:a reachable Postgres in
     });
   });
 
-  describe('Given:several history rows sharing the exact same created_at right at a page boundary, When:paginating', () => {
+  describe('Given:several history rows sharing the exact same created_at, down to the microsecond, right at a page boundary, When:paginating', () => {
     it('should serve every row exactly once across pages, in stable created_at/id ASC order', async () => {
       const { userId, taskId } = await createTestTask();
-      const sharedInstant = withinCurrentPartition(0);
+      const sharedInstant = withinCurrentPartitionPreciseInstant('757772');
 
       await insertHistoryAt(testDatabase.dataSource, taskId, userId, 1, sharedInstant);
       await insertHistoryAt(testDatabase.dataSource, taskId, userId, 2, sharedInstant);

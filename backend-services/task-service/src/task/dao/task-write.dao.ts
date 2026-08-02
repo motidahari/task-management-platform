@@ -11,12 +11,13 @@ import { Task } from '../../domain/task.model';
 
 /**
  * The one SQL fragment every write path on this table appends to its
- * `RETURNING` clause: the same UTC-text projection the entity's
- * `updatedAtRaw` virtual column computes for reads, aliased to the raw-row
- * key `toTaskEntity` expects. Kept as one constant so `create`, `update` and
- * `close` can never drift into three different microsecond projections.
+ * `RETURNING` clause: the same UTC-text projections the entity's
+ * `updatedAtRaw` and `createdAtRaw` virtual columns compute for reads,
+ * aliased to the raw-row keys `toTaskEntity` expects. Kept as one constant
+ * so `create`, `update` and `close` can never drift into different
+ * microsecond projections across the three write paths.
  */
-const RETURNING_WITH_UPDATED_AT_RAW = `*, ${utcTimestampTextExpression('updated_at')} AS updated_at_raw`;
+const RETURNING_WITH_RAW_TIMESTAMPS = `*, ${utcTimestampTextExpression('updated_at')} AS updated_at_raw, ${utcTimestampTextExpression('created_at')} AS created_at_raw`;
 
 /**
  * Adds the one write path `TaskDao` doesn't expose: inserting a brand new
@@ -44,9 +45,10 @@ export class TaskWriteDao extends TaskDao {
    *
    * An explicit query builder rather than the generic `insertOne` helper:
    * `insertOne` can only ever `RETURNING *`, and this write additionally
-   * needs the computed `updated_at_raw` projection so the create response's
-   * microseconds already match what a subsequent `GET` of the same row would
-   * report, instead of a caller seeing them appear only on the next read.
+   * needs the computed `updated_at_raw`/`created_at_raw` projections so the
+   * create response's microseconds already match what a subsequent `GET` of
+   * the same row would report, instead of a caller seeing them appear only
+   * on the next read.
    */
   async create(
     params: { type: string; assignedUserId: string },
@@ -57,7 +59,7 @@ export class TaskWriteDao extends TaskDao {
       .insert()
       .into(TaskEntity)
       .values(params)
-      .returning(RETURNING_WITH_UPDATED_AT_RAW)
+      .returning(RETURNING_WITH_RAW_TIMESTAMPS)
       .execute();
 
     const [rawRow] = insertResult.raw as unknown[];
@@ -103,7 +105,7 @@ export class TaskWriteDao extends TaskDao {
         throw new Error(`Update of task ${taskId} returned no row.`);
       },
       manager,
-      RETURNING_WITH_UPDATED_AT_RAW,
+      RETURNING_WITH_RAW_TIMESTAMPS,
     );
   }
 
@@ -127,7 +129,7 @@ export class TaskWriteDao extends TaskDao {
         throw new Error(`Close of task ${taskId} returned no row.`);
       },
       manager,
-      RETURNING_WITH_UPDATED_AT_RAW,
+      RETURNING_WITH_RAW_TIMESTAMPS,
     );
   }
 }
@@ -147,6 +149,7 @@ interface RawUpdatedTaskRow {
   readonly created_at: Date;
   readonly updated_at: Date;
   readonly updated_at_raw: string;
+  readonly created_at_raw: string;
 }
 
 function toTaskEntity(row: RawUpdatedTaskRow): TaskEntity {
@@ -160,5 +163,6 @@ function toTaskEntity(row: RawUpdatedTaskRow): TaskEntity {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     updatedAtRaw: row.updated_at_raw,
+    createdAtRaw: row.created_at_raw,
   };
 }
