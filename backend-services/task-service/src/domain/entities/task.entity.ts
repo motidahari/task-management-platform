@@ -53,13 +53,22 @@ export class TaskEntity {
    * every read rather than persisted — the pg driver parses `timestamptz` to
    * a millisecond-precision `Date` before TypeORM ever sees the row, so the
    * only way to recover the microseconds Postgres actually stored is to read
-   * them back out as text. `createdAt` gets no equivalent column: the keyset
-   * cursor encodes it as a `Date`, and this codebase never applies a global
-   * `timestamptz` type-parser override that would affect both columns alike.
+   * them back out as text.
    */
   @VirtualColumn({
     type: 'text',
     query: (alias) => utcTimestampTextExpression(`${alias}.updated_at`),
   })
   updatedAtRaw!: string;
+
+  /**
+   * `created_at`'s equivalent of `updatedAtRaw` — the keyset cursor encodes
+   * this column too, and a `Date`-truncated boundary silently drops every
+   * row that shares its cursor row's exact microsecond timestamp.
+   */
+  @VirtualColumn({
+    type: 'text',
+    query: (alias) => utcTimestampTextExpression(`${alias}.created_at`),
+  })
+  createdAtRaw!: string;
 }

@@ -1,6 +1,17 @@
 @use '../../../../styles/variables' as vars;
 @use '../../../../styles/mixins';
 
+// A row is an avatar, a name and a Connect button, so — unlike a plain text
+// option row — its natural height is set by whichever of those three renders
+// tallest, and that varies by component (the Avatar's own box, the button's
+// min-height). Rather than reaching into those components to read theirs
+// (Avatar and Button aren't owned by this file) `.user-gate__item` sets its
+// own `min-height` from this token below, so it — not either child's size —
+// is the one real, deliberate number the row's height always comes from.
+$user-gate-row-height: vars.$spacing-lg * 2;
+$user-gate-visible-row-count: 5;
+$user-gate-list-gap: vars.$spacing-md;
+
 .user-gate {
   @include mixins.flx($justify: center);
   padding: vars.$spacing-xl 0;
@@ -11,15 +22,25 @@
 }
 
 .user-gate__list {
-  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+  @include mixins.flx($direction: column, $gap: $user-gate-list-gap);
   min-width: 20rem;
+  max-height: $user-gate-row-height * $user-gate-visible-row-count + $user-gate-list-gap *
+    ($user-gate-visible-row-count - 1);
   margin: 0;
-  padding: 0;
+  // Keeps a row's trailing control off the scrollbar track, which the gutter
+  // below only reserves — it does not space the content away from it.
+  padding: 0 vars.$spacing-sm 0 0;
+  overflow-y: auto;
+  // Reserves the scrollbar's own track so it never eats into the last column's
+  // content box — the browser only paints it once the list actually scrolls, so
+  // a short directory that never overflows renders with no visible gutter.
+  scrollbar-gutter: stable;
   list-style: none;
 }
 
 .user-gate__item {
   @include mixins.flx($align: center, $justify: space-between, $gap: vars.$spacing-md);
+  min-height: $user-gate-row-height;
 }
 
 .user-gate__name {

@@ -1,4 +1,4 @@
-import { BaseDao, type CursorPage } from '@core/shared';
+import { BaseDao, type CursorPage, toMicrosecondIso } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, DeepPartial } from 'typeorm';
@@ -51,7 +51,7 @@ export class UserDao extends BaseDao<UserEntity, User> {
       limit,
       cursor,
       applyFilter: () => {},
-      keyOf: (user) => ({ createdAt: user.createdAt, id: user.id }),
+      keyOf: (user) => ({ createdAt: toMicrosecondIso(user.createdAtRaw), id: user.id }),
     });
   }
 

@@ -1,4 +1,4 @@
-import { BaseDao, type CursorPage } from '@core/shared';
+import { BaseDao, type CursorPage, toMicrosecondIso } from '@core/shared';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource, DeepPartial } from 'typeorm';
@@ -55,7 +55,7 @@ export class TaskStatusHistoryDao extends BaseDao<TaskStatusHistoryEntity, TaskS
       limit,
       cursor,
       applyFilter: (queryBuilder) => queryBuilder.where('history.taskId = :taskId', { taskId }),
-      keyOf: (history) => ({ createdAt: history.createdAt, id: history.id }),
+      keyOf: (history) => ({ createdAt: toMicrosecondIso(history.createdAtRaw), id: history.id }),
     });
   }
 

@@ -1,7 +1,7 @@
 import { ErrorCode } from '@core/shared/error-codes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BaseHttpService } from './BaseHttpService';
+import { BaseHttpService, toInternalClientApiError } from './BaseHttpService';
 
 const { httpMockInstance, createMock } = vi.hoisted(() => {
   const instance = {
@@ -181,6 +181,23 @@ describe('BaseHttpService', () => {
       }).catch(() => undefined);
 
       expect(logSpy).not.toHaveBeenCalled();
+
+      logSpy.mockRestore();
+    });
+  });
+
+  describe('Given:a caller reaching for the internal client failure shape', () => {
+    it('should build an INTERNAL_ERROR ApiError and log it through the same sink as a real 5xx', () => {
+      const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const apiError = toInternalClientApiError(new Error('cursor walk exceeded its page limit'));
+
+      expect(apiError).toEqual({
+        errorCode: ErrorCode.INTERNAL_ERROR,
+        status: 500,
+        isNetworkError: false,
+      });
+      expect(logSpy).toHaveBeenCalledWith('[http] request failed', expect.anything());
 
       logSpy.mockRestore();
     });
