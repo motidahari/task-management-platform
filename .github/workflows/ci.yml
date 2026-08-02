@@ -141,7 +141,9 @@ jobs:
       - if: needs.detect.outputs.backend == 'true'
         run: npm run build
       # Integration/API suites run against the live postgres + redis containers
-      # above. `--if-present` keeps the job green until a workspace defines the
-      # script, so the service wiring is in place before the first suite lands.
+      # above. The script is named on the one workspace that owns those suites,
+      # never discovered with `--if-present`: a missing script must break the
+      # job, not turn it into a green no-op. The script itself fails when the
+      # suites skipped instead of running.
       - if: needs.detect.outputs.backend == 'true'
-        run: npm run test:integration --workspaces --if-present
+        run: npm run test:integration -w backend-services/task-service
