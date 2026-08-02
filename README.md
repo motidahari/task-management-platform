@@ -206,6 +206,159 @@ open-tasks index is partial because closed tasks accumulate without bound while
 "my open tasks" is the default view — the hot index stays proportional to the
 small working set instead of the whole table.
 
+## Requirements Coverage
+
+This section maps each major assignment requirement to its implementation and test location, so reviewers can verify completeness.
+
+### 1. Type-Agnostic Workflow Engine
+
+**Requirement:** A generic task workflow engine where a task's type declares its statuses and required fields, with no hardcoded type logic in the engine itself.
+
+**Implementation:**
+
+- **Type definitions** — `backend-services/task-service/src/task-type/definitions/` contains `ProcurementDefinition` (3 statuses) and `DevelopmentDefinition` (4 statuses), each implementing `TaskTypeDefinition` interface. `definitions/index.ts` registers all types in a single `TASK_TYPE_DEFINITION_CLASSES` array (the only registration point).
+- **Registry & validation** — `TaskTypeRegistry` (src/task-type/task-type.registry.ts) validates all definitions at bootstrap with fail-fast checks for duplicate keys, status gaps, fields on status 1, and orphaned types in the database.
+- **Engine** — `TaskService` (src/task/task.service.ts) implements `changeStatus`, `createTask`, and `closeTask` using only the type's declared statuses and required fields; no type name appears in the engine logic.
+- **Tests** — `tests/unit/task-type/` contains tests asserting definitions are valid. Task lifecycle test (T3.9) adds a throwaway `QaDefinition` in a test module and verifies full CRUD works with zero engine changes—this is the assignment's headline claim.
+
+**Proof of extensibility:** Adding a third task type requires only adding a new `TaskTypeDefinition` class and appending it to `TASK_TYPE_DEFINITION_CLASSES` — no engine changes.
+
+### 2. Custom Field Storage
+
+**Requirement:** How custom fields for different task types are stored, given that fields vary by type and status.
+
+**Implementation:**
+
+- **Storage strategy** — Single `jsonb` column (`custom_fields`) on the `tasks` table, keyed by the type's own field names. [see README section "Custom-field storage" for the design rationale: single column beats both one-column-per-field (would require migrations for new types) and a side EAV table (every read becomes a join)].
+- **Enforcement** — `FieldValidatorService` (src/task-type/field-validator.service.ts) validates submitted fields against the **target status's declared `requiredFields`**, checking string `maxLength` and `pattern`, number `min`/`max`, and rejecting any unknown key. Runs on forward moves only (backward moves re-enter a status the task already satisfied). All validation errors reported at once.
+- **Persistence** — `TaskService.changeStatus` shallow-merges validated fields into the column, so it always holds the union of everything supplied so far. Each transition also snapshots exactly the fields it supplied into the history row's `fields_snapshot`.
+- **Tests** — `tests/unit/task-type/field-validator.service.spec.ts` covers every validation rule (missing, type mismatch, over-length, pattern, unknown keys). `tests/api/task.api.spec.ts` covers end-to-end: create → advance with fields → verify fields persisted and history snapshotted.
+
+### 3. Status Semantics
+
+**Requirement:** Status representation and meaning in a type-agnostic engine.
+
+**Implementation:**
+
+- **Status is an ordinal** — Stored as a plain `int`, representing position within a type's declared status list. Status 2 of `procurement` is unrelated to status 2 of `development`; any cross-type status comparison is meaningless.
+- **Wire representation** — REST responses always carry both the numeric `status` and the resolved `statusName` (from the registry), so clients render the name, not the number. See `TaskResponse` DTO (src/task/dto/task.response.ts).
+- **Final status is derived** — Never stored as a column or declared in a definition. Computed as the last status in a type's declared list via `registry.finalStatusOf(type)`. Adding a status to a type automatically updates its final status for all existing rows—no back-fill needed.
+- **Tests** — `tests/unit/task-type/task-type.registry.spec.ts` asserts `finalStatusOf` returns the last status. Task lifecycle tests (tests/api/) verify that a status value depends on type.
+
+### 4. Transition Rules
+
+**Requirement:** How a task advances, reverses, and closes, including when field validation applies.
+
+**Implementation:**
+
+- **Arithmetic** — `TaskService.changeStatus` enforces: forward goes to `status + 1` (rejects past final status), backward goes to `status - 1` (rejects below status 1). Both are exactly one step; no skipping.
+- **Field validation** — Required fields are validated **only on forward moves** (target status's `requiredFields` checked by `FieldValidatorService`). Backward moves validate nothing, because re-entering a status the task already satisfied requires no new proof.
+- **Optimistic concurrency** — Before changing status, the service checks `expectedStatus` against the current status (sent by the client as a precondition). Mismatch returns `409 TASK_STATE_CONFLICT`, preventing stale/duplicate submits.
+- **Closing** — Separate operation (`TaskService.closeTask`), allowed only when the task sits at its final status. A closed task rejects every further transition.
+- **Atomicity** — Every mutation opens its own explicit transaction; the status update, history append, and realtime emit happen atomically.
+- **Tests** — `tests/unit/task/task.service.spec.ts` covers every rule violation and both directions. `tests/api/task.api.spec.ts` covers end-to-end conflict and closure paths.
+
+### 5. Keyset Pagination (Cursor-based)
+
+**Requirement:** Efficient pagination that scales to large tables without OFFSET costs.
+
+**Implementation:**
+
+- **Index alignment** — Pagination uses keyset (cursor) instead of OFFSET. Each query's index column order and direction exactly match the sort order, keeping page access O(log n) at any table size.
+- **Indexes** — `idx_tasks_assignee_page (assigned_user_id, created_at DESC, id DESC)` for user task lists (all-DESC, matching the query); partial `idx_tasks_assignee_open (… ) WHERE is_closed = false` for the open-tasks view; `idx_history_task (task_id, created_at, id)` for history (oldest-first). `id` included in every key as a tiebreaker for rows sharing a millisecond `created_at`.
+- **Cursor validation** — Cursors are opaque to clients. On decode, `CursorCodec` validates format; malformed cursors return `400 VALIDATION_ERROR`.
+- **Database** — `BaseDao.findKeysetPage` (src/common/dao/base.dao.ts) implements the keyset algorithm; concrete DAOs (`TaskDao`, `TaskStatusHistoryDao`) use it for `findPageByAssignee` and `findPageByTask`.
+- **Frontend** — `useTaskStore` (frontend-application/task-app/src/features/tasks/stores/useTaskStore.ts) handles cursor pagination with cycle detection—appends new pages without duplicating rows at boundaries.
+- **Tests** — `tests/integration/dao/task.dao.spec.ts` covers cursor ordering across duplicate `created_at` at page boundaries, and malformed cursors. Frontend store tests cover multi-page loads and cycle detection.
+
+### 6. Realtime Events
+
+**Requirement:** Real-time notifications of task changes across connected clients, fanned out across multiple backend instances.
+
+**Implementation:**
+
+- **Socket.IO namespace** — `/realtime`, using `@socket.io/redis-adapter` for cross-instance pub/sub via Redis.
+- **Rooms** — `task:{id}` (detail view updates) and `user:{id}` (list view: tasks entering/leaving that user's assignment).
+- **Events** — `task:created`, `task:updated`, `task:closed`. Each emitted **only after the database transaction commits** (wrapped in try/catch log-and-swallow in `TaskEventsPublisher`, src/realtime/task-events-publisher.ts), so clients never see an event for rolled-back changes.
+- **Staleness guard** — Payloads carry a fixed-length microsecond UTC ISO string `updatedAt`. On the client (`useTaskStore`, src/features/tasks/stores/useTaskStore.ts), events are applied only if their `updatedAt` is lexicographically newer than the current task's `updatedAt`, preventing out-of-order events from overwriting newer state.
+- **Reconnect** — Clients rejoin their rooms on reconnect and emit `realtime:reconnected` to trigger manual reconciliation.
+- **Tests** — `tests/unit/realtime/task-events-publisher.spec.ts` covers room targeting and the commit-only guarantee. Cross-instance test (tests/integration/realtime/) uses two gateway instances + testcontainers Redis to verify an event on instance A arrives at a socket on instance B.
+
+### 7. Seeded Demo Users & User Directory
+
+**Requirement:** At least 20 demo users so the user picker and pagination are exercised realistically.
+
+**Implementation:**
+
+- **Seed migration** — `SeedUsers` migration (backend-services/task-service/src/migrations/1731531600000-SeedUsers.ts) inserts 22 distinct users with unique `@demo.local` emails. IDs are generated per environment (idempotent on email via `ON CONFLICT (email) DO NOTHING`), so IDs differ between local, CI, and staging.
+- **User directory endpoint** — `GET /api/v1/users` returns all users with keyset pagination (20 per page). The second page is reachable, exercising pagination.
+- **Frontend consumption** — `useCurrentUserStore` (frontend-application/task-app/src/features/core/stores/useCurrentUserStore.ts) fetches the full directory by following cursors until exhausted (implements cursor walking with cycle detection).
+- **Assignee picker** — Every assignee field is built from the full directory, not from task history, so any user in the directory is selectable for any task.
+- **Tests** — `tests/integration/migrations/seed-users.migration.spec.ts` asserts count ≥ 20, emails unique, no literal UUIDs in the SQL, and idempotent re-run inserts nothing. Frontend store tests cover multi-page loads. API tests cover user listing and pagination.
+
+### 8. Test Data Hygiene
+
+**Requirement:** Every DB-backed test must leave the database byte-for-byte as it found it, with no hand-typed UUIDs in tests or migrations.
+
+**Implementation:**
+
+- **Transactional cleanup** — `DatabaseTestHelper` (tests/infra/database-test-helper.ts) records every insert and update in a ledger. `afterEach` deletes inserted rows (children-before-parents) and restores updated rows to their pre-image. Runs even if the test failed.
+- **No literal UUIDs** — All test IDs come from `gen_random_uuid()` (database default) or `crypto.randomUUID()` (runtime). Zero hand-typed UUIDs anywhere in tests or migrations.
+- **Test assertions** — `tests/infra/env-example.test.mjs` fails fast on any literal UUID or unparameterized credential in the `.env.example`.
+- **Tests** — `tests/integration/infra/database-test-helper.spec.ts` self-tests the ledger: verifies row counts are restored after inserts, updates, and raw SQL writes.
+
+### 9. Full-Stack UI with Drawer Navigation
+
+**Requirement:** A complete frontend that implements the workflow, with distinct routable screens (user gate, user's task list, task drawer) and proper state management.
+
+**Implementation:**
+
+- **Routing** — App root `/` shows the user gate (no user selected). Selected user's list is `/users/:userId` (survives reload). Task drawer is nested under the list route as `/users/:userId/tasks/:taskId`, so the list stays mounted during drawer interaction.
+- **User gate** — `UserGate` component (frontend-application/task-app/src/features/core/components/UserGate.tsx) presents the seeded users in a scrollable list (5 visible rows, scroll into view on keyboard navigation). Defaults to empty state; renders error state when user directory fails to load.
+- **Task list** — `MyTasksView` (frontend-application/task-app/src/features/tasks/views/MyTasksView.tsx) shows a table of tasks for the selected user. Filter: All / Open / Closed (defaults to All, showing every task assigned). Load-more pagination with keyset cursors.
+- **Create task modal** — `CreateTaskForm` (frontend-application/task-app/src/features/tasks/components/CreateTaskForm.tsx) opens via a modal (registered in `ModalPropsMap`, ensuring compile-time type safety on modal props).
+- **Task drawer** — `TaskDetailView` (frontend-application/task-app/src/features/tasks/views/TaskDetailView.tsx) opens as a right-anchored drawer over the list. Two columns: left shows task fields and history (oldest-first timeline); right shows a stepper + next-status action panel. Advance/Reverse/Close buttons; error-field highlighting from `details.missing`.
+- **Realtime integration** — Tasks update live via `user:{id}` room (list) and `task:{id}` room (drawer). Staleness guard prevents out-of-order events from overwriting newer state.
+- **Tests** — Component specs in `src/features/*/components/*.spec.ts` and store tests in `src/features/*/stores/*.spec.ts`. Integration: `tests/pages/` directory contains e2e-like tests verifying the full workflows.
+
+### 10. Conditional GET (HTTP 304) Caching
+
+**Requirement:** The API must support conditional GET for cache efficiency, and responses must be correct with no spurious error logging.
+
+**Implementation:**
+
+- **ETag & Cache-Control** — `@ConditionalGet()` decorator (src/common/http-interceptors/conditional-get.interceptor.ts) adds `ETag` and `Cache-Control: no-cache` headers to GET responses (currently only `GET /task-types`, but the pattern is reusable).
+- **304 Not Modified** — When a client sends `If-None-Match: <etag>` matching the current ETag, the server responds with `304` (empty body, same headers, no error).
+- **Fix for logging** — The interceptor was returning `EMPTY` to short-circuit Nest's response, which caused `lastValueFrom(EMPTY)` to reject with `EmptyError` in the exception filter. Fixed by returning the handler's result instead—the response body stays absent and the 304 stays intact, but the observable completes normally with no error.
+- **Zero error logging** — API test asserts the 304 response with correct headers and empty body, **and that no error-level line is logged** while serving it.
+- **Tests** — `tests/unit/common/http-interceptors/conditional-get.interceptor.spec.ts` unit tests the interceptor's observable completion. `tests/api/task-types.api.spec.ts` verifies the full 304 path: request with ETag → 304 response with headers and no body → no error logs.
+
+### 11. Backend Code Quality
+
+**Requirement:** All backend code follows the layering pattern: Controllers stay thin (validate in, delegate, reshape out), Services own transactions and business logic, DAOs map entities to domain models.
+
+**Implementation:**
+
+- **Controllers** (src/task/task.controller.ts, src/user/user.controller.ts) — Validate request DTOs, delegate to services, reshape responses. No business logic.
+- **Services** — `TaskService` owns every transaction explicitly, validating preconditions in a fixed order: closed status → expectedStatus CAS → arithmetic → field validation → assignee existence → single UPDATE → history append. Realtime emit wraps in try/catch log-and-swallow (the one sanctioned swallow).
+- **DAOs** — Extend `BaseDao<TEntity, TDomain>`, map TypeORM entities to domain models. `BaseDao` owns generic helpers: `findOneOrThrow`, `updateByIdReturning`, save-then-toDomainModel.
+- **Domain models** — Private fields with validating setters throwing `ValidationException`.
+- **Tests** — Unit tests for each service method. Integration tests for DAO queries. API tests for the full flow.
+
+### 12. Frontend Code Quality
+
+**Requirement:** Frontend implements the view → component → store → service layering; stores use Zustand with proper error handling and TTL resolution.
+
+**Implementation:**
+
+- **Services** — `TaskService`, `UserService` extend `BaseHttpService`, call get/post/patch with typed DTOs, map responses to domain models.
+- **Stores** — `useTaskStore`, `useCurrentUserStore` (Zustand). Actions return `Promise<boolean>`. Catch is terminal: set error state, toast via the domain resolver, `TASK_STATE_CONFLICT` → auto-refetch.
+- **Components** — Stateless or use hooks. `DynamicFieldsForm` renders per descriptor type (string/number). `StatusStepper` derived from type metadata, type-agnostic.
+- **Shared design system** — `src/shared/components/` has Button, TextField, Select, Card, Badge, Modal, Toast, Spinner, ThemeToggle. Styled with theme tokens only (src/styles/_themes.scss).
+- **i18n** — `useTranslation(scope)` with auto-aggregated co-located JSON files per feature.
+- **Error handling** — `resolveErrorText` maps each `ErrorCode` to client copy; unmapped / `INTERNAL_ERROR` / network → generic fallback. Server `errorMessage` never rendered.
+- **Tests** — Component unit tests, store tests with mutation coverage, integration tests.
+
 ## Adding a third task type
 
 The engine is type-agnostic, so a new type is added declaratively — **no engine
