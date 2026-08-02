@@ -6,11 +6,7 @@ import { TaskEntity } from '../../../src/domain/entities/task.entity';
 import { UserEntity } from '../../../src/domain/entities/user.entity';
 import { TaskStatusHistoryDao } from '../../../src/domain/task-status-history.dao';
 import { buildTestHistoryEntry, buildTestTask, buildTestUser } from '../support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../support/test-database';
 
 /**
  * Runs only against a real Postgres instance reachable at `DB_URL` — skipped
@@ -63,20 +59,11 @@ function withinCurrentPartition(offsetMs: number): Date {
 }
 
 describeAgainstRealDatabase('TaskStatusHistoryDao, Given:a reachable Postgres instance', () => {
-  let testDatabase: TestDatabase;
+  const testDatabase = useTestDatabase();
   let historyDao: TaskStatusHistoryDao;
 
-  beforeAll(async () => {
-    testDatabase = await setupTestDatabase();
+  beforeAll(() => {
     historyDao = new TaskStatusHistoryDao(testDatabase.dataSource, testDatabase.dataSource);
-  });
-
-  afterEach(async () => {
-    await testDatabase.cleanup();
-  });
-
-  afterAll(async () => {
-    await testDatabase.teardown();
   });
 
   async function createTestTask(): Promise<{ userId: string; taskId: string }> {

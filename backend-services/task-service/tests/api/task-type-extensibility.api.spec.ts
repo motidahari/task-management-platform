@@ -20,11 +20,7 @@ import {
   type TaskTypeDefinition,
 } from '../../src/task-type/interfaces/task-type-definition.interface';
 import { buildTestUser } from '../integration/support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../integration/support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../integration/support/test-database';
 
 /** Runs only against a real Postgres instance reachable at `DB_URL` — same convention every other database-backed suite in this service uses. */
 const describeAgainstRealDatabase = isTestDatabaseConfigured() ? describe : describe.skip;
@@ -116,7 +112,7 @@ function buildRealDatabaseModule(dataSource: DataSource): Type<unknown> {
 describeAgainstRealDatabase(
   'Task type extensibility, Given:a throwaway task type registered only for this suite',
   () => {
-    let testDatabase: TestDatabase;
+    const testDatabase = useTestDatabase();
     let app: NestExpressApplication;
     let assignedUserId: string;
 
@@ -151,8 +147,6 @@ describeAgainstRealDatabase(
     const fakeRealtimeRedisAdapter = { adapterConstructor: FakeSocketIoAdapter };
 
     beforeAll(async () => {
-      testDatabase = await setupTestDatabase();
-
       /**
        * The registration seam: `ALL_TASK_TYPE_DEFINITIONS` is the exact token
        * `TaskTypeRegistry` injects (`task-type.module.ts`), so overriding its
@@ -186,19 +180,16 @@ describeAgainstRealDatabase(
       await app.init();
     });
 
+    // Registered after `useTestDatabase`'s own, so this fixture row is written
+    // into an already-open ledger and is undone with everything else.
     beforeEach(async () => {
       const userRepository = testDatabase.dataSource.getRepository(UserEntity);
       const user = await userRepository.save(buildTestUser());
       assignedUserId = user.id;
     });
 
-    afterEach(async () => {
-      await testDatabase.cleanup();
-    });
-
     afterAll(async () => {
       await app.close();
-      await testDatabase.teardown();
     });
 
     async function createQaTask(): Promise<TaskResponse> {

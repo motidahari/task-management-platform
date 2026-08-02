@@ -6,11 +6,7 @@ import { TaskEntity } from '../../../src/domain/entities/task.entity';
 import { UserEntity } from '../../../src/domain/entities/user.entity';
 import { TaskDao } from '../../../src/domain/task.dao';
 import { buildTestTask, buildTestUser } from '../support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../support/test-database';
 
 /**
  * Runs only against a real Postgres instance reachable at `DB_URL` — skipped
@@ -79,20 +75,11 @@ async function insertTaskWithPreciseUpdatedAt(
 }
 
 describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () => {
-  let testDatabase: TestDatabase;
+  const testDatabase = useTestDatabase();
   let taskDao: TaskDao;
 
-  beforeAll(async () => {
-    testDatabase = await setupTestDatabase();
+  beforeAll(() => {
     taskDao = new TaskDao(testDatabase.dataSource, testDatabase.dataSource);
-  });
-
-  afterEach(async () => {
-    await testDatabase.cleanup();
-  });
-
-  afterAll(async () => {
-    await testDatabase.teardown();
   });
 
   describe('Given:a task row exists, When:getByIdForUpdate is called with its id', () => {

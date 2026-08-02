@@ -20,11 +20,7 @@ import {
   buildTestTask,
   buildTestUser,
 } from '../integration/support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../integration/support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../integration/support/test-database';
 
 /**
  * Runs only against a real Postgres instance reachable at `DB_URL` — same
@@ -78,7 +74,7 @@ function buildRealDatabaseModule(dataSource: DataSource): Type<unknown> {
 describeAgainstRealDatabase(
   'Task history endpoint, Given:the app is running against a reachable Postgres instance',
   () => {
-    let testDatabase: TestDatabase;
+    const testDatabase = useTestDatabase();
     let app: NestExpressApplication;
 
     const databaseUrl = process.env.DB_URL ?? '';
@@ -118,8 +114,6 @@ describeAgainstRealDatabase(
     const fakeRealtimeRedisAdapter = { adapterConstructor: FakeSocketIoAdapter };
 
     beforeAll(async () => {
-      testDatabase = await setupTestDatabase();
-
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(APP_CONFIG)
         .useValue(BASE_CONFIG)
@@ -136,13 +130,8 @@ describeAgainstRealDatabase(
       await app.init();
     });
 
-    afterEach(async () => {
-      await testDatabase.cleanup();
-    });
-
     afterAll(async () => {
       await app.close();
-      await testDatabase.teardown();
     });
 
     /**
