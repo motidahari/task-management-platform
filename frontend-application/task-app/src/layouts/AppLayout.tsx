@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { Outlet } from 'react-router';
+import { Link, Outlet } from 'react-router';
 
 import { MODAL_REGISTRY } from '../core/modals/modalRegistry';
 import { ModalHost } from '../shared/components/Modal';
@@ -20,7 +20,9 @@ export function AppLayout(): ReactElement {
   return (
     <div className="app-layout">
       <header className="app-layout__header">
-        <span className="app-layout__wordmark">{t('title')}</span>
+        <Link to="/" className="app-layout__wordmark">
+          {t('title')}
+        </Link>
         <ThemeToggle />
       </header>
       <main className="app-layout__content">

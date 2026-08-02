@@ -5,32 +5,6 @@
   @include mixins.flx($direction: column, $gap: vars.$spacing-lg);
 }
 
-.my-tasks-view__gate {
-  @include mixins.flx($justify: center);
-  padding: vars.$spacing-xl 0;
-}
-
-.my-tasks-view__gate-title {
-  margin: 0 0 vars.$spacing-md;
-}
-
-.my-tasks-view__gate-list {
-  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
-  min-width: 20rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.my-tasks-view__gate-item {
-  @include mixins.flx($align: center, $justify: space-between, $gap: vars.$spacing-md);
-}
-
-.my-tasks-view__gate-name {
-  flex: 1;
-  color: var(--color-text);
-}
-
 .my-tasks-view__toolbar {
   @include mixins.flx($direction: column, $gap: vars.$spacing-md);
 

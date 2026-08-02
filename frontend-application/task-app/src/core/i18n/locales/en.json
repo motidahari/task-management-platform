@@ -113,16 +113,19 @@
     "success-toast": "Task created."
   },
   "my-tasks-view": {
-    "gate-title": "Who's working today?",
-    "gate-error-title": "We couldn't load the user list.",
-    "gate-retry-button": "Retry",
-    "connect-button": "Connect",
+    "unknown-user-title": "We couldn't find that user.",
     "user-picker-label": "Viewing tasks for",
     "user-picker-placeholder": "Select a user",
     "filter-label": "Status",
     "filter-open": "Open",
     "filter-closed": "Closed",
     "create-task-button": "Create task"
+  },
+  "user-gate": {
+    "title": "Who's working today?",
+    "error-title": "We couldn't load the user list.",
+    "retry-button": "Retry",
+    "connect-button": "Connect"
   },
   "shared-errors": {
     "generic": "Something went wrong. Please try again.",

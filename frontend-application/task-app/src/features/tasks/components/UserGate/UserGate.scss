@@ -1,0 +1,28 @@
+@use '../../../../styles/variables' as vars;
+@use '../../../../styles/mixins';
+
+.user-gate {
+  @include mixins.flx($justify: center);
+  padding: vars.$spacing-xl 0;
+}
+
+.user-gate__title {
+  margin: 0 0 vars.$spacing-md;
+}
+
+.user-gate__list {
+  @include mixins.flx($direction: column, $gap: vars.$spacing-md);
+  min-width: 20rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-gate__item {
+  @include mixins.flx($align: center, $justify: space-between, $gap: vars.$spacing-md);
+}
+
+.user-gate__name {
+  flex: 1;
+  color: var(--color-text);
+}

@@ -64,19 +64,10 @@ describe('useCurrentUserStore', () => {
     });
   });
 
-  describe('Given:selectUser is called with a user id', () => {
-    it('should set that id as the selected user', () => {
-      useCurrentUserStore.getState().selectUser('u-2');
-
-      expect(useCurrentUserStore.getState().selectedUserId).toBe('u-2');
-    });
-  });
-
   describe('Given:reset is called after the store accumulated state', () => {
     it('should restore every field to its initial value', () => {
       useCurrentUserStore.setState({
         users: [buildUser()],
-        selectedUserId: 'u-1',
         error: validationError,
       });
 
@@ -84,7 +75,6 @@ describe('useCurrentUserStore', () => {
 
       expect(useCurrentUserStore.getState()).toMatchObject({
         users: [],
-        selectedUserId: null,
         isLoading: false,
         error: null,
       });

@@ -22,6 +22,17 @@ $container-max-width: 72rem;
     font-size: vars.$font-size-lg;
     font-weight: vars.$font-weight-semibold;
     color: var(--color-text);
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--color-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
   }
 
   &__content {

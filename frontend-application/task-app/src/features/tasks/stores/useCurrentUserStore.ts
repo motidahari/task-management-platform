@@ -9,30 +9,24 @@ import type { User } from '../types';
 
 export interface CurrentUserStoreState {
   readonly users: readonly User[];
-  /** The user `MyTasksView`'s picker currently has selected — `null` before any pick. */
-  readonly selectedUserId: string | null;
   readonly isLoading: boolean;
   readonly error: ApiError | null;
   fetchUsers: () => Promise<boolean>;
-  selectUser: (userId: string) => void;
   reset: () => void;
 }
 
-const initialState: Pick<
-  CurrentUserStoreState,
-  'users' | 'selectedUserId' | 'isLoading' | 'error'
-> = {
+const initialState: Pick<CurrentUserStoreState, 'users' | 'isLoading' | 'error'> = {
   users: [],
-  selectedUserId: null,
   isLoading: false,
   error: null,
 };
 
 /**
- * The picker's backing data plus which user is currently selected — the
- * single source `MyTasksView` reads to know whose tasks to load. Selection
- * never touches the network; only `fetchUsers` does, so switching users is
- * instant and it is the task list's own store that reacts to the change.
+ * The seeded-user directory backing every picker in the app. Which user the
+ * screen is currently scoped to is a routing concern, not state this store
+ * tracks — it lives in the URL (`/users/:userId`) and is read from `useParams`
+ * where it's needed, so there is exactly one place that answers "who am I
+ * viewing" instead of a route value and a store value that could disagree.
  */
 export const useCurrentUserStore = create<CurrentUserStoreState>()((set) => ({
   ...initialState,
@@ -53,8 +47,6 @@ export const useCurrentUserStore = create<CurrentUserStoreState>()((set) => ({
       set({ isLoading: false });
     }
   },
-
-  selectUser: (userId): void => set({ selectedUserId: userId }),
 
   reset: (): void => set(initialState),
 }));

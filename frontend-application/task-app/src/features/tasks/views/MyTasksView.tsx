@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
-import { Outlet, useMatch, useNavigate } from 'react-router';
+import { Outlet, useMatch, useNavigate, useParams } from 'react-router';
 
 import { useBus } from '../../../core/bus/useBus';
 import { Avatar } from '../../../shared/components/Avatar';
 import { Button } from '../../../shared/components/Button';
-import { Card } from '../../../shared/components/Card';
-import { EmptyState } from '../../../shared/components/EmptyState';
-import { Skeleton } from '../../../shared/components/Skeleton';
 import { useTranslation } from '../../../shared/hooks/useTranslation';
 import { TaskList } from '../components/TaskList';
+import { UserGate } from '../components/UserGate';
 import { UserSelect } from '../components/UserSelect';
 import { useTaskRealtime } from '../hooks/useTaskRealtime';
 import { useCurrentUserStore } from '../stores/useCurrentUserStore';
@@ -58,12 +56,12 @@ function buildStatusDisplayNameLookup(
 }
 
 /**
- * This view renders above the detail route rather than on it, so `useParams`
- * never carries that id here — matching the child path is what surfaces the
- * task the drawer is showing, whether it was reached by client navigation or
- * a direct deep link.
+ * This view renders above the detail route rather than on it, so its own
+ * `useParams` never carries the task id — matching the child path is what
+ * surfaces the task the drawer is showing, whether it was reached by client
+ * navigation or a direct deep link.
  */
-const TASK_DETAIL_PATH = '/tasks/:taskId';
+const TASK_DETAIL_PATH = '/users/:userId/tasks/:taskId';
 
 interface TaskListSectionProps {
   readonly userId: string;
@@ -114,7 +112,7 @@ function TaskListSection({
       tasks={items}
       isLoading={isLoading}
       hasMore={nextCursor !== null}
-      onSelectTask={(taskId) => void navigate(`/tasks/${taskId}`)}
+      onSelectTask={(taskId) => void navigate(`/users/${userId}/tasks/${taskId}`)}
       onLoadMore={handleLoadMore}
       resolveAssigneeName={resolveAssigneeName}
       resolveTypeDisplayName={resolveTypeDisplayName}
@@ -124,86 +122,30 @@ function TaskListSection({
   );
 }
 
-const GATE_SKELETON_ROW_COUNT = 3;
-
-interface UserGateProps {
-  readonly users: readonly User[];
-  readonly isLoading: boolean;
-  readonly hasError: boolean;
-  readonly onConnect: (userId: string) => void;
-  readonly onRetry: () => void;
-}
-
-/**
- * The screen shown before any user is picked: every seeded user as an
- * identity to connect as, rather than a bare dropdown — there is nothing
- * else useful to show (no tasks, no create action) until one is chosen.
- */
-function UserGate({ users, isLoading, hasError, onConnect, onRetry }: UserGateProps): ReactElement {
-  const { t } = useTranslation('my-tasks-view');
-
-  return (
-    <div className="my-tasks-view__gate">
-      <Card testId="my-tasks-view-user-gate">
-        <h2 className="my-tasks-view__gate-title">{t('gate-title')}</h2>
-        {hasError ? (
-          <EmptyState
-            icon="alert"
-            title={t('gate-error-title')}
-            action={
-              <Button onClick={onRetry} testId="my-tasks-view-gate-retry">
-                {t('gate-retry-button')}
-              </Button>
-            }
-          />
-        ) : isLoading ? (
-          <ul className="my-tasks-view__gate-list" aria-hidden="true">
-            {Array.from({ length: GATE_SKELETON_ROW_COUNT }, (_, index) => (
-              <li className="my-tasks-view__gate-item" key={index}>
-                <Skeleton variant="circle" width={40} height={40} />
-                <Skeleton variant="text" width="60%" />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <ul className="my-tasks-view__gate-list">
-            {users.map((user) => (
-              <li className="my-tasks-view__gate-item" key={user.id}>
-                <Avatar seed={user.id} alt={user.name} />
-                <span className="my-tasks-view__gate-name">{user.name}</span>
-                <Button
-                  onClick={() => onConnect(user.id)}
-                  testId={`my-tasks-view-connect-${user.id}`}
-                >
-                  {t('connect-button')}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  );
-}
-
 /**
  * The landing screen: connect as a user, filter their tasks open/closed,
  * page through them in a table, and create a new one via the modal. Task
  * data itself stays entirely in `useTaskStore`/`useCurrentUserStore` — this
- * view only wires the selection and filter into their actions. Also hosts
- * the `Outlet` for the task-detail route, so the table stays mounted behind
- * whatever renders there.
+ * view only wires the route-scoped user id and the filter into their
+ * actions. Also hosts the `Outlet` for the task-detail route, so the table
+ * stays mounted behind whatever renders there.
+ *
+ * The user id comes from the route (`/users/:userId`), never from a store —
+ * that keeps a list URL a single, reloadable source of truth for whose list
+ * it is. Until the directory confirms that id is real, this renders the same
+ * error path `ConnectView` does rather than a blank list, covering both an
+ * unknown id and a directory that failed to load.
  */
 export function MyTasksView(): ReactElement {
   const { t } = useTranslation('my-tasks-view');
   const { emit } = useBus();
+  const navigate = useNavigate();
+  const userId = useParams<{ userId: string }>().userId ?? '';
   const selectedTaskId = useMatch(TASK_DETAIL_PATH)?.params.taskId;
   const users = useCurrentUserStore((state) => state.users);
-  const selectedUserId = useCurrentUserStore((state) => state.selectedUserId);
   const isLoadingUsers = useCurrentUserStore((state) => state.isLoading);
   const usersError = useCurrentUserStore((state) => state.error);
   const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
-  const selectUser = useCurrentUserStore((state) => state.selectUser);
   const typeDefinitions = useTaskTypeStore((state) => state.definitions);
 
   const [isClosedFilter, setIsClosedFilter] = useState(false);
@@ -212,9 +154,13 @@ export function MyTasksView(): ReactElement {
     void fetchUsers();
   }, [fetchUsers]);
 
+  const isUserKnown = users.some((user) => user.id === userId);
+  const isDirectoryResolved = !isLoadingUsers && usersError === null;
+  const showList = isDirectoryResolved && isUserKnown;
+
   const assigneeNamesById = useMemo(() => buildAssigneeNameLookup(users), [users]);
   const resolveAssigneeName = useCallback(
-    (userId: string) => assigneeNamesById[userId] ?? userId,
+    (assigneeId: string) => assigneeNamesById[assigneeId] ?? assigneeId,
     [assigneeNamesById],
   );
 
@@ -243,25 +189,26 @@ export function MyTasksView(): ReactElement {
 
   return (
     <div className="my-tasks-view">
-      {selectedUserId === null ? (
+      {!showList ? (
         <UserGate
           users={users}
           isLoading={isLoadingUsers}
-          hasError={usersError !== null}
-          onConnect={selectUser}
+          hasError={!isLoadingUsers && (usersError !== null || !isUserKnown)}
+          errorTitle={usersError === null ? t('unknown-user-title') : undefined}
+          onConnect={(nextUserId) => void navigate(`/users/${nextUserId}`)}
           onRetry={() => void fetchUsers()}
         />
       ) : (
         <>
           <section className="my-tasks-view__toolbar">
             <div className="my-tasks-view__current-user">
-              <Avatar seed={selectedUserId} alt={resolveAssigneeName(selectedUserId)} size={32} />
+              <Avatar seed={userId} alt={resolveAssigneeName(userId)} size={32} />
               <UserSelect
                 id="my-tasks-view-user"
                 label={t('user-picker-label')}
                 users={users}
-                value={selectedUserId}
-                onChange={selectUser}
+                value={userId}
+                onChange={(nextUserId) => void navigate(`/users/${nextUserId}`)}
                 placeholder={t('user-picker-placeholder')}
                 disabled={isLoadingUsers}
               />
@@ -288,7 +235,7 @@ export function MyTasksView(): ReactElement {
           </section>
 
           <TaskListSection
-            userId={selectedUserId}
+            userId={userId}
             isClosed={isClosedFilter}
             selectedTaskId={selectedTaskId}
             resolveAssigneeName={resolveAssigneeName}

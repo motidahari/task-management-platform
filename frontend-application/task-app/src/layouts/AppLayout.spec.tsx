@@ -53,5 +53,12 @@ describe('AppLayout', () => {
       expect(screen.getByTestId('toast-host')).toBeInTheDocument();
       expect(screen.getByTestId('modal-host')).toBeInTheDocument();
     });
+
+    it('should render the wordmark as a real, focusable link to the app root', () => {
+      renderAppLayout();
+
+      const wordmark = screen.getByRole('link', { name: 'app-layout.title' });
+      expect(wordmark).toHaveAttribute('href', '/');
+    });
   });
 });
