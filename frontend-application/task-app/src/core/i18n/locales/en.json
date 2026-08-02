@@ -117,6 +117,7 @@
     "user-picker-label": "Viewing tasks for",
     "user-picker-placeholder": "Select a user",
     "filter-label": "Status",
+    "filter-all": "All",
     "filter-open": "Open",
     "filter-closed": "Closed",
     "create-task-button": "Create task"

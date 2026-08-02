@@ -215,6 +215,21 @@ describeAgainstRealDatabase(
       });
     });
 
+    describe('Given:a user with both open and closed tasks, When:their tasks are requested with no isClosed filter', () => {
+      it('should return both the open task and the closed task', async () => {
+        const userId = await createUser();
+        const openTask = await insertTaskAt(userId, new Date('2026-01-01T00:00:00.000Z'), false);
+        const closedTask = await insertTaskAt(userId, new Date('2026-01-02T00:00:00.000Z'), true);
+
+        const response = await request(app.getHttpServer())
+          .get(`/api/v1/users/${userId}/tasks`)
+          .expect(200);
+        const page = response.body as TaskPageResponse;
+
+        expect(page.items.map((task) => task.id)).toEqual([closedTask.id, openTask.id]);
+      });
+    });
+
     describe('Given:a user id that does not exist, When:their tasks are requested', () => {
       it('should answer 404 USER_NOT_FOUND', async () => {
         const response = await request(app.getHttpServer())

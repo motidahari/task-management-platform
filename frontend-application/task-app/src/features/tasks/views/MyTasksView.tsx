@@ -3,6 +3,7 @@ import { Outlet, useMatch, useNavigate, useParams } from 'react-router';
 
 import { useBus } from '../../../core/bus/useBus';
 import { Button } from '../../../shared/components/Button';
+import { Select, type SelectOption } from '../../../shared/components/Select';
 import { useTranslation } from '../../../shared/hooks/useTranslation';
 import { TaskList } from '../components/TaskList';
 import { UserGate } from '../components/UserGate';
@@ -62,9 +63,30 @@ function buildStatusDisplayNameLookup(
  */
 const TASK_DETAIL_PATH = '/users/:userId/tasks/:taskId';
 
+const FILTER_OPTION_ALL = 'all';
+const FILTER_OPTION_OPEN = 'open';
+const FILTER_OPTION_CLOSED = 'closed';
+
+/**
+ * `isClosedFilter` is the single source of truth, kept in the `boolean |
+ * undefined` shape `TaskListSection`/`fetchTasksForUser` already need — these
+ * two functions are the only boundary where it's read as, or built from, the
+ * string-valued `Select` option.
+ */
+function isClosedFilterToOptionValue(isClosedFilter: boolean | undefined): string {
+  if (isClosedFilter === undefined) return FILTER_OPTION_ALL;
+  return isClosedFilter ? FILTER_OPTION_CLOSED : FILTER_OPTION_OPEN;
+}
+
+function optionValueToIsClosedFilter(optionValue: string): boolean | undefined {
+  if (optionValue === FILTER_OPTION_OPEN) return false;
+  if (optionValue === FILTER_OPTION_CLOSED) return true;
+  return undefined;
+}
+
 interface TaskListSectionProps {
   readonly userId: string;
-  readonly isClosed: boolean;
+  readonly isClosed: boolean | undefined;
   readonly selectedTaskId: string | undefined;
   readonly resolveAssigneeName: (userId: string) => string;
   readonly resolveTypeDisplayName: (type: string) => string;
@@ -122,7 +144,7 @@ function TaskListSection({
 }
 
 /**
- * The landing screen: connect as a user, filter their tasks open/closed,
+ * The landing screen: connect as a user, filter their tasks all/open/closed,
  * page through them in a table, and create a new one via the modal. Task
  * data itself stays entirely in `useTaskStore`/`useCurrentUserStore` — this
  * view only wires the route-scoped user id and the filter into their
@@ -147,7 +169,7 @@ export function MyTasksView(): ReactElement {
   const fetchUsers = useCurrentUserStore((state) => state.fetchUsers);
   const typeDefinitions = useTaskTypeStore((state) => state.definitions);
 
-  const [isClosedFilter, setIsClosedFilter] = useState(false);
+  const [isClosedFilter, setIsClosedFilter] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     void fetchUsers();
@@ -182,6 +204,12 @@ export function MyTasksView(): ReactElement {
     [statusDisplayNamesByKey],
   );
 
+  const filterOptions: readonly SelectOption[] = [
+    { value: FILTER_OPTION_ALL, label: t('filter-all') },
+    { value: FILTER_OPTION_OPEN, label: t('filter-open') },
+    { value: FILTER_OPTION_CLOSED, label: t('filter-closed') },
+  ];
+
   function openCreateTaskModal(): void {
     emit('modal:open', { id: 'create-task', props: {} });
   }
@@ -211,21 +239,16 @@ export function MyTasksView(): ReactElement {
                 disabled={isLoadingUsers}
               />
             </div>
-            <div className="my-tasks-view__filter" role="group" aria-label={t('filter-label')}>
-              <Button
-                variant={isClosedFilter ? 'secondary' : 'primary'}
-                onClick={() => setIsClosedFilter(false)}
-                testId="my-tasks-view-filter-open"
-              >
-                {t('filter-open')}
-              </Button>
-              <Button
-                variant={isClosedFilter ? 'primary' : 'secondary'}
-                onClick={() => setIsClosedFilter(true)}
-                testId="my-tasks-view-filter-closed"
-              >
-                {t('filter-closed')}
-              </Button>
+            <div className="my-tasks-view__filter">
+              <Select
+                id="my-tasks-view-filter"
+                label={t('filter-label')}
+                value={isClosedFilterToOptionValue(isClosedFilter)}
+                options={filterOptions}
+                onChange={(optionValue) =>
+                  setIsClosedFilter(optionValueToIsClosedFilter(optionValue))
+                }
+              />
             </div>
             <Button icon="plus" onClick={openCreateTaskModal} testId="my-tasks-view-create-task">
               {t('create-task-button')}
