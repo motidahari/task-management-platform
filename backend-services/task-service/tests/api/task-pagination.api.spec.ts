@@ -15,11 +15,7 @@ import { configureApp } from '../../src/infrastructure/http/configure-app';
 import { REDIS_CLIENT } from '../../src/infrastructure/redis/redis-client.provider';
 import { REALTIME_REDIS_ADAPTER } from '../../src/realtime/redis-adapter.provider';
 import { buildTestUser } from '../integration/support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../integration/support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../integration/support/test-database';
 
 /**
  * Runs only against a real Postgres instance reachable at `DB_URL` — same
@@ -66,7 +62,7 @@ function buildRealDatabaseModule(dataSource: DataSource): Type<unknown> {
 describeAgainstRealDatabase(
   'User tasks pagination, Given:the app is running against a reachable Postgres instance',
   () => {
-    let testDatabase: TestDatabase;
+    const testDatabase = useTestDatabase();
     let app: NestExpressApplication;
 
     const databaseUrl = process.env.DB_URL ?? '';
@@ -100,8 +96,6 @@ describeAgainstRealDatabase(
     const fakeRealtimeRedisAdapter = { adapterConstructor: FakeSocketIoAdapter };
 
     beforeAll(async () => {
-      testDatabase = await setupTestDatabase();
-
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(APP_CONFIG)
         .useValue(BASE_CONFIG)
@@ -118,17 +112,8 @@ describeAgainstRealDatabase(
       await app.init();
     });
 
-    beforeEach(async () => {
-      await testDatabase.openLedger();
-    });
-
-    afterEach(async () => {
-      await testDatabase.cleanup();
-    });
-
     afterAll(async () => {
       await app.close();
-      await testDatabase.teardown();
     });
 
     async function createUser(): Promise<string> {

@@ -7,8 +7,8 @@ import { UserEntity } from '../../../src/domain/entities/user.entity';
 import { buildTestUser } from '../support/test-data-builders';
 import {
   isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
+  TEST_RUN_RECORD_PREFIX,
+  useTestDatabase,
 } from '../support/test-database';
 
 /**
@@ -48,24 +48,11 @@ async function insertUserAt(
 }
 
 describeAgainstRealDatabase('UserDao, Given:a reachable Postgres instance', () => {
-  let testDatabase: TestDatabase;
+  const testDatabase = useTestDatabase();
   let userDao: UserDao;
 
-  beforeAll(async () => {
-    testDatabase = await setupTestDatabase();
+  beforeAll(() => {
     userDao = new UserDao(testDatabase.dataSource, testDatabase.dataSource);
-  });
-
-  beforeEach(async () => {
-    await testDatabase.openLedger();
-  });
-
-  afterEach(async () => {
-    await testDatabase.cleanup();
-  });
-
-  afterAll(async () => {
-    await testDatabase.teardown();
   });
 
   describe('Given:a user row exists, When:getById is called with its id', () => {
@@ -104,7 +91,10 @@ describeAgainstRealDatabase('UserDao, Given:a reachable Postgres instance', () =
         Array.from({ length: ROW_COUNT }, (_, index) =>
           insertUserAt(
             testDatabase.dataSource,
-            { name: `zztest_page-${index}`, email: `zztest_page-${index}@example.com` },
+            {
+              name: `${TEST_RUN_RECORD_PREFIX}page-${index}`,
+              email: `${TEST_RUN_RECORD_PREFIX}page-${index}@example.com`,
+            },
             new Date(baseTime + index * 10),
           ),
         ),

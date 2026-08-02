@@ -15,11 +15,7 @@ import { configureApp } from '../../src/infrastructure/http/configure-app';
 import { REDIS_CLIENT } from '../../src/infrastructure/redis/redis-client.provider';
 import type { TaskEventPayload } from '../../src/realtime/task-events.publisher';
 import { buildTestUser } from '../integration/support/test-data-builders';
-import {
-  isTestDatabaseConfigured,
-  setupTestDatabase,
-  TestDatabase,
-} from '../integration/support/test-database';
+import { isTestDatabaseConfigured, useTestDatabase } from '../integration/support/test-database';
 
 /**
  * This suite is the one place a real socket client sits on the other end of
@@ -130,7 +126,7 @@ async function joinTaskRoom(client: ClientSocket, taskId: string): Promise<void>
 describeAgainstRealInfra(
   "TaskService's realtime emission, Given:the app is running against reachable Postgres and Redis instances",
   () => {
-    let testDatabase: TestDatabase;
+    const testDatabase = useTestDatabase();
     let app: NestExpressApplication;
     let port: number;
 
@@ -160,8 +156,6 @@ describeAgainstRealInfra(
     });
 
     beforeAll(async () => {
-      testDatabase = await setupTestDatabase();
-
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
         .overrideProvider(APP_CONFIG)
         .useValue(BASE_CONFIG)
@@ -180,17 +174,8 @@ describeAgainstRealInfra(
       port = (app.getHttpServer().address() as { port: number }).port;
     });
 
-    beforeEach(async () => {
-      await testDatabase.openLedger();
-    });
-
-    afterEach(async () => {
-      await testDatabase.cleanup();
-    });
-
     afterAll(async () => {
       await app.close();
-      await testDatabase.teardown();
     });
 
     async function seedUser(): Promise<string> {

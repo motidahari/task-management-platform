@@ -4,7 +4,7 @@ import {
   PARTITION_MAINTENANCE_LOCK_KEY,
   PartitionMaintenanceService,
 } from '../../../../../src/infrastructure/database/partitioning/partition-maintenance.service';
-import { setupTestDatabase, TestDatabase } from '../../../support/test-database';
+import { useTestDatabase } from '../../../support/test-database';
 
 const DATABASE_URL = process.env.DB_URL;
 const HISTORY_TABLE_NAME = 'task_status_history';
@@ -96,9 +96,14 @@ async function historyPartitionNames(dataSource: DataSource): Promise<string[]> 
 describeAgainstRealDatabase(
   'PartitionMaintenanceService lock exclusion, Given:a real Postgres instance',
   () => {
+    // The ledger, and the hooks that make sure it is opened and restored around
+    // every test. This spec writes no data rows of its own, and that is what
+    // proves it rather than a comment saying so. Its `beforeAll` also settles
+    // whether the database is reachable at all, before this suite's own
+    // connection below is asked to do anything with it.
+    useTestDatabase();
+
     let dataSource: DataSource;
-    let testDatabase: TestDatabase;
-    let databaseReachable = true;
 
     beforeAll(async () => {
       dataSource = new DataSource({
@@ -117,64 +122,24 @@ describeAgainstRealDatabase(
         extra: { options: `-c search_path=${TEST_SCHEMA_NAME}` },
       });
 
-      try {
-        await dataSource.initialize();
-      } catch {
-        // DB_URL was set but nothing is actually listening (e.g. compose not
-        // up) — every test below backs off cleanly instead of failing.
-        databaseReachable = false;
-      }
+      await dataSource.initialize();
 
-      if (databaseReachable) {
-        // Deliberately outside the connectivity catch above: a genuine setup
-        // failure here (a typo, a bad search_path, a permissions problem)
-        // must fail the suite loudly, not get misreported as "database
-        // unreachable" and silently pass every test via the early return.
-        //
-        // Schema-qualified, so it succeeds regardless of the current
-        // `search_path` — which only the service's own unqualified statements
-        // depend on having been set up first.
-        await dataSource.query(`CREATE SCHEMA IF NOT EXISTS ${TEST_SCHEMA_NAME}`);
-        await recreateBareHistoryParent(dataSource);
-
-        // A second, `public`-resolving connection purely for the ledger: this
-        // spec writes no data rows of its own, and the ledger is what proves
-        // that rather than leaving it asserted in a comment.
-        testDatabase = await setupTestDatabase();
-      }
-    });
-
-    beforeEach(async () => {
-      if (databaseReachable) {
-        await testDatabase.openLedger();
-      }
-    });
-
-    afterEach(async () => {
-      if (databaseReachable) {
-        await testDatabase.cleanup();
-      }
+      // Schema-qualified, so it succeeds regardless of the current
+      // `search_path` — which only the service's own unqualified statements
+      // depend on having been set up first.
+      await dataSource.query(`CREATE SCHEMA IF NOT EXISTS ${TEST_SCHEMA_NAME}`);
+      await recreateBareHistoryParent(dataSource);
     });
 
     afterAll(async () => {
-      if (databaseReachable) {
-        await testDatabase?.teardown();
-        // Cascades onto the parent and every partition created under it in
-        // one statement — `public.task_status_history` is never touched.
-        await dataSource.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA_NAME} CASCADE`);
-      }
-
-      if (dataSource?.isInitialized) {
-        await dataSource.destroy();
-      }
+      // Cascades onto the parent and every partition created under it in one
+      // statement — `public.task_status_history` is never touched.
+      await dataSource.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA_NAME} CASCADE`);
+      await dataSource.destroy();
     });
 
     describe('When:another session already holds the maintenance lock', () => {
       it('should back off without creating any partition or throwing', async () => {
-        if (!databaseReachable) {
-          return;
-        }
-
         // A dedicated `QueryRunner` holds its own connection for its entire
         // lifetime — kept open here (never released mid-test) so it is a
         // genuinely separate session from whichever pooled connection the
@@ -198,10 +163,6 @@ describeAgainstRealDatabase(
 
     describe('When:two replicas run provisionPartitions concurrently against an unheld lock', () => {
       it('should let exactly one perform the DDL, with both resolving and no duplicate-partition failure', async () => {
-        if (!databaseReachable) {
-          return;
-        }
-
         await recreateBareHistoryParent(dataSource);
 
         const service = new PartitionMaintenanceService(dataSource);
@@ -216,10 +177,6 @@ describeAgainstRealDatabase(
 
     describe('When:this spec has finished dropping and recreating its own history parent', () => {
       it('should leave the migrated public history table and its partitions intact for the suites that follow', async () => {
-        if (!databaseReachable) {
-          return;
-        }
-
         const schema = await publicHistorySchema(dataSource);
 
         expect(schema.isPartitionedParent).toBe(true);
