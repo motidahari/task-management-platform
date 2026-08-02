@@ -1,13 +1,10 @@
 import type { QueryRunner } from 'typeorm';
 
 import { SeedUsers1700000000002 } from '../../../src/migrations/1700000000002-SeedUsers';
+import { COLUMNS_PER_ROW, DEMO_USERS } from '../../../src/migrations/support/demo-users';
 
-const DEMO_USER_EMAILS = [
-  'alice@demo.local',
-  'bob@demo.local',
-  'carol@demo.local',
-  'dana@demo.local',
-];
+const MIN_SEEDED_USER_COUNT = 20;
+const DEMO_USER_EMAILS = DEMO_USERS.map((user) => user.email);
 
 const UUID_LITERAL_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -36,38 +33,60 @@ function findCall(
 
 describe('SeedUsers1700000000002', () => {
   describe('Given:a fresh database, When:the migration runs up()', () => {
-    it('should insert exactly four rows', async () => {
+    it('should seed at least 20 demo users, one row per entry in the shared roster', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().up(queryRunner);
 
       const [, params] = findCall(query, 'INSERT INTO users');
-      const columnsPerRow = 2;
+      const rowCount = (params ?? []).length / COLUMNS_PER_ROW;
 
-      expect((params ?? []).length / columnsPerRow).toBe(4);
+      expect(DEMO_USERS.length).toBeGreaterThanOrEqual(MIN_SEEDED_USER_COUNT);
+      expect(rowCount).toBe(DEMO_USERS.length);
     });
 
-    it('should pass each seeded email as a query parameter, not interpolated into the SQL', async () => {
+    it('should emit every roster email exactly once, each ending in @demo.local', async () => {
+      const { queryRunner, query } = fakeQueryRunner();
+
+      await new SeedUsers1700000000002().up(queryRunner);
+
+      const [, params] = findCall(query, 'INSERT INTO users');
+      const emittedEmails = (params ?? []).filter(
+        (value): value is string => typeof value === 'string' && value.endsWith('@demo.local'),
+      );
+
+      expect(emittedEmails).toEqual(DEMO_USER_EMAILS);
+      expect(new Set(emittedEmails).size).toBe(emittedEmails.length);
+    });
+
+    it('should pass every seeded name and email as a query parameter, never interpolated into the SQL', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().up(queryRunner);
 
       const [statement, params] = findCall(query, 'INSERT INTO users');
 
-      DEMO_USER_EMAILS.forEach((email) => {
-        expect(params).toContain(email);
-        expect(statement).not.toContain(email);
+      DEMO_USERS.forEach((user) => {
+        expect(params).toContain(user.name);
+        expect(params).toContain(user.email);
+        expect(statement).not.toContain(user.email);
       });
     });
 
-    it('should be idempotent via ON CONFLICT (email) DO NOTHING', async () => {
+    it('should be idempotent via ON CONFLICT (email) DO NOTHING, unchanged on a second run', async () => {
       const { queryRunner, query } = fakeQueryRunner();
+      const migration = new SeedUsers1700000000002();
 
-      await new SeedUsers1700000000002().up(queryRunner);
+      await migration.up(queryRunner);
+      await migration.up(queryRunner);
 
-      const [statement] = findCall(query, 'INSERT INTO users');
+      const calls = executedCalls(query);
 
-      expect(statement).toContain('ON CONFLICT (email) DO NOTHING');
+      expect(calls).toHaveLength(2);
+      calls.forEach(([statement]) => {
+        expect(statement).toContain('ON CONFLICT (email) DO NOTHING');
+      });
+      expect(calls[1]).toEqual(calls[0]);
     });
 
     it('should never hand-write a uuid literal into the executed SQL', async () => {
@@ -82,7 +101,7 @@ describe('SeedUsers1700000000002', () => {
   });
 
   describe('Given:a seeded database, When:the migration runs down()', () => {
-    it('should delete exactly the seeded demo user emails, passed as a query parameter', async () => {
+    it('should delete exactly the roster emails, passed as a query parameter', async () => {
       const { queryRunner, query } = fakeQueryRunner();
 
       await new SeedUsers1700000000002().down(queryRunner);
