@@ -187,6 +187,10 @@ describeAgainstRealDatabase(
     });
 
     beforeEach(async () => {
+      // Ahead of the fixture row below, which is itself one of the writes the
+      // ledger has to undo.
+      await testDatabase.openLedger();
+
       const userRepository = testDatabase.dataSource.getRepository(UserEntity);
       const user = await userRepository.save(buildTestUser());
       assignedUserId = user.id;

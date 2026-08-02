@@ -87,6 +87,10 @@ describeAgainstRealDatabase('TaskDao, Given:a reachable Postgres instance', () =
     taskDao = new TaskDao(testDatabase.dataSource, testDatabase.dataSource);
   });
 
+  beforeEach(async () => {
+    await testDatabase.openLedger();
+  });
+
   afterEach(async () => {
     await testDatabase.cleanup();
   });

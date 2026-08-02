@@ -17,9 +17,10 @@ function nextRecordSequence(): number {
 }
 
 /**
- * A user row carrying {@link TEST_RECORD_PREFIX} in both `name` and `email`
- * so {@link cleanupTestDatabase} always finds it, with sensible defaults an
- * integration test can override only the field it cares about.
+ * A user row carrying {@link TEST_RECORD_PREFIX} in both `name` and `email` so
+ * the backstop sweep can find it too, with sensible defaults an integration
+ * test can override only the field it cares about. Saving it is what the
+ * ledger records; the prefix is not what gets it cleaned up.
  */
 export function buildTestUser(overrides: Partial<UserEntity> = {}): Partial<UserEntity> {
   const sequence = nextRecordSequence();
@@ -32,9 +33,9 @@ export function buildTestUser(overrides: Partial<UserEntity> = {}): Partial<User
 }
 
 /**
- * A task row assigned to `assignedUserId` — pass a user built by
- * {@link buildTestUser} (and saved first) so cleanup's user-prefix filter
- * reaches this row through the FK.
+ * A task row assigned to `assignedUserId` — any existing user will do, since
+ * the ledger addresses this row by its own primary key rather than reaching it
+ * through the assignee.
  */
 export function buildTestTask(
   assignedUserId: string,

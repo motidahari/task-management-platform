@@ -180,6 +180,10 @@ describeAgainstRealInfra(
       port = (app.getHttpServer().address() as { port: number }).port;
     });
 
+    beforeEach(async () => {
+      await testDatabase.openLedger();
+    });
+
     afterEach(async () => {
       await testDatabase.cleanup();
     });

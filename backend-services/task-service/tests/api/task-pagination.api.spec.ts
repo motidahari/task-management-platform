@@ -118,6 +118,10 @@ describeAgainstRealDatabase(
       await app.init();
     });
 
+    beforeEach(async () => {
+      await testDatabase.openLedger();
+    });
+
     afterEach(async () => {
       await testDatabase.cleanup();
     });

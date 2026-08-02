@@ -71,6 +71,10 @@ describeAgainstRealDatabase('TaskStatusHistoryDao, Given:a reachable Postgres in
     historyDao = new TaskStatusHistoryDao(testDatabase.dataSource, testDatabase.dataSource);
   });
 
+  beforeEach(async () => {
+    await testDatabase.openLedger();
+  });
+
   afterEach(async () => {
     await testDatabase.cleanup();
   });
