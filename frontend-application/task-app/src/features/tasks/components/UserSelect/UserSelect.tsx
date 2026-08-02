@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 
+import { Avatar } from '../../../../shared/components/Avatar';
 import { Select, type SelectOption } from '../../../../shared/components/Select';
 import type { User } from '../../types';
 
@@ -16,7 +17,11 @@ export interface UserSelectProps {
 }
 
 function toUserOptions(users: readonly User[]): SelectOption[] {
-  return users.map((user) => ({ value: user.id, label: user.name }));
+  return users.map((user) => ({
+    value: user.id,
+    label: user.name,
+    icon: <Avatar seed={user.id} size={20} />,
+  }));
 }
 
 /**
