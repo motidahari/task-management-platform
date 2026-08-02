@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "setup": "node scripts/ensure-env-file.mjs",
-    "start": "npm run setup && docker compose up -d --build",
+    "start": "npm install && npm run build -w @core/shared && npm run setup && docker compose up -d --build",
     "stop": "docker compose down",
     "storybook": "npm run storybook -w frontend-application/task-app",
     "storybook:build": "npm run build-storybook -w frontend-application/task-app",

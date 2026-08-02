@@ -25,9 +25,16 @@ new type is a data change, not an engine change (see
 ## Quick start (Docker Compose)
 
 ```bash
-npm run start      # generates .env if missing, then: docker compose up -d --build
+npm run start      # installs deps + builds shared lib + generates .env + starts all services
 npm run stop       # docker compose down
 ```
+
+On first run (after cloning), `npm run start` will:
+
+1. Install all npm dependencies for the monorepo.
+2. Build the shared library (`@core/shared`) so Docker images can import it.
+3. Create `.env` and `frontend-application/task-app/.env.local` from `.env.example` if they don't exist.
+4. Build Docker images and start all five services with proper health checks and dependency ordering.
 
 Compose brings up five services:
 
