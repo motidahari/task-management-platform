@@ -57,19 +57,19 @@ function findStatusIndex(statuses: readonly StatusDefinition[], status: number):
 }
 
 /**
- * Reassignment candidates' ids come entirely from data this task already
- * carries — its current assignee plus everyone the history shows it was
- * ever handed to — rather than a separate query, so the picker stays
- * populated with real, task-relevant people with no extra request. Each
- * id's label is resolved to a name via the loaded user directory, falling
- * back to the raw id for a candidate outside it.
+ * Every status change hands the task to one of the seeded users, so the
+ * picker offers the full directory rather than only the people this task
+ * has already touched — reused as-is from the store, no separate request.
+ * The task's current assignee is added too, in case it fell out of the
+ * directory (a user seeded away since), so it stays selectable and keeps
+ * showing its resolved name — or the raw id, past that fallback.
  */
 function collectAssigneeOptions(
   task: Task,
-  historyAssigneeIds: readonly string[],
+  users: readonly User[],
   resolveAssigneeName: (userId: string) => string,
 ): SelectOption[] {
-  const ids = new Set([task.assignedUserId, ...historyAssigneeIds]);
+  const ids = new Set([task.assignedUserId, ...users.map((user) => user.id)]);
   return Array.from(ids).map((id) => ({ value: id, label: resolveAssigneeName(id) }));
 }
 
@@ -191,16 +191,9 @@ export function TaskDetailView(): ReactElement {
     [assigneeNamesById],
   );
 
-  const historyAssigneeIds = useMemo(
-    () => historyItems.map((entry) => entry.assignedUserId),
-    [historyItems],
-  );
   const assigneeOptions = useMemo(
-    () =>
-      currentTask
-        ? collectAssigneeOptions(currentTask, historyAssigneeIds, resolveAssigneeName)
-        : [],
-    [currentTask, historyAssigneeIds, resolveAssigneeName],
+    () => (currentTask ? collectAssigneeOptions(currentTask, users, resolveAssigneeName) : []),
+    [currentTask, users, resolveAssigneeName],
   );
 
   function handleCloseClick(): void {
