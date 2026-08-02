@@ -1,6 +1,30 @@
 @use '../../../styles/variables' as vars;
 @use '../../../styles/mixins';
 
+// `.select__option` renders an optional leading icon before its label — an
+// `Avatar` in every real `UserSelect` row — so, unlike a plain text row, its
+// natural height is set by whichever of the icon or the text line renders
+// taller, and that varies by what gets passed in (`Select` doesn't own
+// `Avatar`). So `.select__option` asserts its own `min-height` from this
+// token below, chosen comfortably above what any icon this component is
+// documented to render needs, instead of leaving the row height as an
+// emergent property of whatever gets slotted into `icon`. That also makes a
+// text-only row (the placeholder) the same height as every real option,
+// rather than rendering a few pixels shorter. The panel caps out at seven of
+// these rows and scrolls beyond that — enough to orient in a long directory
+// without the open panel itself growing tall enough to cover the rest of the
+// view.
+$select-option-row-height: vars.$spacing-lg * 2;
+$select-visible-option-count: 7;
+
+// `.select__listbox`'s own block padding and border sit outside the option
+// rows themselves, so the cap has to fold both in too — otherwise it lands
+// mid-row and slices the last visible option instead of landing on the
+// boundary below it. Reused in the `padding`/`border` declarations further
+// down so the numbers here can never drift from what actually renders.
+$select-listbox-padding-block: vars.$spacing-xs;
+$select-listbox-border-width: 1px;
+
 .select {
   @include mixins.flx($direction: column, $gap: vars.$spacing-xs);
   width: 100%;
@@ -62,12 +86,25 @@
     left: 0;
     z-index: 10;
     width: 100%;
-    max-height: 240px;
+    // Rows themselves account for seven of these; the padding and border
+    // below account for the rest, so the cap falls exactly on the boundary
+    // below the seventh row instead of slicing into it.
+    max-height: calc(
+      #{$select-option-row-height * $select-visible-option-count + $select-listbox-padding-block *
+        2} + #{$select-listbox-border-width * 2}
+    );
     margin: vars.$spacing-xs 0 0;
-    padding: vars.$spacing-xs 0;
+    // Right padding keeps a row's content off the scrollbar track the gutter
+    // below only reserves — it does not space the content away from it.
+    padding: $select-listbox-padding-block vars.$spacing-sm $select-listbox-padding-block 0;
     overflow-y: auto;
+    // Reserves the scrollbar's own track so it never eats into the option
+    // rows' content width — the browser only paints it once the list
+    // actually scrolls, so a short option list that never overflows renders
+    // with no visible gutter.
+    scrollbar-gutter: stable;
     list-style: none;
-    border: 1px solid var(--color-border);
+    border: $select-listbox-border-width solid var(--color-border);
     border-radius: vars.$radius-sm;
     background-color: var(--color-bg-card);
     box-shadow: var(--shadow-md);
@@ -75,6 +112,7 @@
 
   &__option {
     @include mixins.flx($align: center, $gap: vars.$spacing-sm);
+    min-height: $select-option-row-height;
     padding: vars.$spacing-sm;
     color: var(--color-text);
     cursor: pointer;

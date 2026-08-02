@@ -79,6 +79,27 @@ export const Disabled: Story = {
   },
 };
 
+const manyOptions = Array.from({ length: 22 }, (_, index) => ({
+  value: `user-${index}`,
+  label: `User ${index}`,
+}));
+
+export const WithManyOptions: Story = {
+  args: {
+    value: '',
+    options: manyOptions,
+    placeholder: 'Choose a user',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A directory-sized option list, matching the seeded demo directory — every option is still reachable, but the open panel caps at seven rows and scrolls beyond that instead of growing tall enough to cover the rest of the view.',
+      },
+    },
+  },
+};
+
 export const WithOptionIcon: Story = {
   args: {
     value: 'feature',

@@ -56,6 +56,7 @@ export function Select({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listboxRef = useRef<HTMLUListElement>(null);
 
   const hasError = Boolean(errorText);
   const errorId = `${id}-error`;
@@ -82,6 +83,17 @@ export function Select({
   useEffect(() => {
     setActiveIndex((current) => (current < 0 ? current : clampIndex(current, options.length)));
   }, [options]);
+
+  // The listbox scrolls beyond its capped height, so moving the active option
+  // past the visible window with the keyboard would otherwise leave it
+  // rendered but out of view. `nearest` only scrolls when the option isn't
+  // already visible, so it never fights a mouse-driven hover.
+  useEffect(() => {
+    if (!isOpen) return;
+    listboxRef.current
+      ?.querySelector<HTMLLIElement>('.select__option--active')
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [isOpen, activeIndex]);
 
   function openPanel(): void {
     if (disabled) return;
@@ -206,6 +218,7 @@ export function Select({
         </button>
         {isOpen && (
           <ul
+            ref={listboxRef}
             className="select__listbox"
             id={listboxId}
             role="listbox"
